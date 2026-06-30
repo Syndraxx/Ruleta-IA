@@ -1,0 +1,61 @@
+  const [accumulatedResults, setAccumulatedResults] = useState<Array<{
+    const previousDays = accumulatedResults
+  }, [draws, accumulatedResults, loteria, fecha]);
+      const sortedRecords = [...accumulatedResults]
+    if (accumulatedResults.length === 0) {
+  // Available lotteries list computed from accumulatedResults
+    accumulatedResults.forEach(r => {
+  }, [accumulatedResults]);
+    const filteredRecords = accumulatedResults.filter(record => {
+  }, [accumulatedResults, deepStartDate, deepEndDate, deepLoteria]);
+      accumulatedResults.forEach((r) => {
+  }, [accumulatedResults, loteria, hoursList]);
+      return computeComprehensiveOracle(accumulatedResults, draws, loteria, selectedHour, hoursList, false);
+  }, [accumulatedResults, draws, loteria, selectedHour, hoursList]);
+      return computeComprehensiveOracle(accumulatedResults, draws, loteria, "08:00 AM", hoursList, true);
+  }, [accumulatedResults, draws, loteria, hoursList]);
+        const yesterdayRecord = accumulatedResults.find(
+    accumulatedResults.forEach((r) => {
+  }, [accumulatedResults, loteria]);
+    // Also look at today's record in accumulatedResults (if any exists for the current date and lottery)
+    const todayRecord = accumulatedResults.find(r => r.fecha === fecha && r.loteria === loteria);
+    const pastResults = accumulatedResults.filter(r => r.loteria === loteria && r.fecha < fecha);
+  }, [accumulatedResults, loteria, draws, fecha]);
+    accumulatedResults.forEach((r) => {
+  }, [accumulatedResults, loteria, draws, hourlyStatsList]);
+    const yesterdayRecord = accumulatedResults.find(
+      const targetYesterdayRecord = accumulatedResults.find(
+  }, [fecha, loteria, draws, accumulatedResults, hoursList, varSaltoActive]);
+    const pastRecords = accumulatedResults
+  }, [sistemaxHour, sistemaxSelectedLoteria, draws, accumulatedResults, fecha]);
+        const pastRecords = accumulatedResults
+    accumulatedResults,
+      const pastRecords = accumulatedResults
+  }, [sistemaxSelectedLoteria, draws, accumulatedResults, fecha]);
+        const yesterdayRecord = accumulatedResults.find(
+        const oracle = computeComprehensiveOracle(accumulatedResults, draws, loteria, selectedHour, hoursList);
+    const weekData = accumulatedResults
+    const monthData = accumulatedResults
+    const allData = accumulatedResults
+  const handleRestoreFromHistoryItem = (item: typeof accumulatedResults[0]) => {
+      const sortedResults = [...accumulatedResults].sort((a, b) => a.fecha.localeCompare(b.fecha));
+                              const yesterdayRecord = accumulatedResults.find(
+                      ● ARCHIVO HISTÓRICO ({accumulatedResults.length} REGISTROS)
+                        accumulatedResults
+                const searchRecord = accumulatedResults.find(
+                    disabled={accumulatedResults.length === 0}
+                      accumulatedResults.length === 0
+                    {accumulatedResults.filter(r => r.loteria === loteria && r.fecha.startsWith(String(monthlyScrapeYear))).length} / 365
+                      const list = accumulatedResults.filter(r => r.loteria === loteria && r.fecha.startsWith(String(monthlyScrapeYear)));
+                    {accumulatedResults.filter(r => r.loteria === loteria).reduce((sum, r) => sum + Object.values(r.draws).filter(Boolean).length, 0)}
+                  items={accumulatedResults.filter(r => r.loteria === loteria)}
+                      accumulatedResults={accumulatedResults}
+                        accumulatedResults.forEach(r => {
+                        const todayRecord = accumulatedResults.find(r => r.fecha === fecha && r.loteria === loteria);
+                        const pastResults = accumulatedResults.filter(r => r.loteria === loteria && r.fecha < fecha);
+                          accumulatedResults.forEach(r => {
+                      const nextDayRecord = accumulatedResults.find(
+                  DATOS REALES GUARDADOS: {accumulatedResults.length} DÍAS DE REGISTRO
+                      if (accumulatedResults.length > 0) {
+                        const dates = accumulatedResults.map(r => r.fecha).sort();
+                    const yesterdayRecord = accumulatedResults.find(

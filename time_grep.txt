@@ -1,0 +1,33 @@
+88:  const [time, setTime] = useState({ h: "12", m: "00", s: "00", ampm: "AM" });
+103:    const timer = setInterval(updateTime, 1000);
+104:    return () => clearInterval(timer);
+121:            <span key={time.h} className="text-xl md:text-3xl font-black font-mono tracking-tight animate-clock-roll">
+122:              {time.h}
+134:            <span key={time.m} className="text-xl md:text-3xl font-black font-mono tracking-tight animate-clock-roll">
+135:              {time.m}
+147:            <span key={time.s} className="text-xl md:text-3xl font-black font-mono tracking-tight animate-clock-roll">
+148:              {time.s}
+160:            <span>{time.ampm}</span>
+276:  // Auto-scroll the real-time extraction logs console terminal
+326:      // Current date/time in Venezuela (UTC-4)
+913:      // 1. Build chronological timeline
+938:      const timeline: Array<{ fecha: string; hour: string; code: string }> = [];
+944:              timeline.push({
+960:        for (let i = 0; i < timeline.length; i++) {
+961:          if (timeline[i].code === targetCode) {
+977:            if (pos >= 0 && pos < timeline.length) {
+978:              const neighborCode = timeline[pos].code;
+989:            if (pos >= 0 && pos < timeline.length) {
+990:              const code = timeline[pos].code;
+1000:            if (pos >= 0 && pos < timeline.length) {
+1001:              const code = timeline[pos].code;
+1099:              totalDraws // total times drawn in the 12 slots of those days
+2048:  // Real-time Advanced Oracle predictions for the currently selected hour
+2057:  // Real-time Advanced Oracle predictions for tomorrow's first draw (08:00 AM) using today's completed draws
+2919:    const time = new Date().toLocaleTimeString();
+2920:    setConsoleLogs(prev => [`[${time}] ${msg}`, ...prev.slice(0, 30)]);
+4575:    const timeline: Array<{
+4695:      timeline.push({
+4707:    return timeline;
+4720:    const timeNow = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+4759:      timestamp: timeNow,

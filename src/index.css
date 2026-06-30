@@ -1,0 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+:root {
+  --app-font-size: 18.5px; /* Default larger, more eye-catching size */
+}
+
+html {
+  font-size: var(--app-font-size);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Make body have robust text weight and high-contrast styling */
+body {
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  letter-spacing: -0.011em;
+}
+
+/* Custom Neo-Brutalist Comic Card shadows & borders */
+.comic-border {
+  border: 3px solid #000000;
+}
+
+.comic-shadow {
+  box-shadow: 4px 4px 0px #000000;
+}
+
+.comic-shadow-large {
+  box-shadow: 6px 6px 0px #000000;
+}
+
+.comic-shadow-small {
+  box-shadow: 2px 2px 0px #000000;
+}
+
+/* Custom Animations */
+@keyframes pulse-fast {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(0.98); }
+}
+
+@keyframes clock-bounce {
+  0%, 100% {
+    animation-timing-function: ease-in-out;
+    transform: translateY(0);
+  }
+  50% {
+    animation-timing-function: ease-in-out;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes clock-roll {
+  0% {
+    transform: translateY(-8px);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-pulse-fast {
+  animation: pulse-fast 1.5s infinite ease-in-out;
+}
+
+.animate-clock-bounce {
+  animation: clock-bounce 2s infinite ease-in-out;
+}
+
+.animate-clock-roll {
+  animation: clock-roll 0.35s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+/* LiquidGlass-effect */
+.LiquidGlass-effect {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  backdrop-filter: blur(4px);
+  overflow: hidden;
+  isolation: isolate;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 60%, rgba(0, 0, 0, 0.04) 100%);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.15), inset 0 -1px 1px rgba(0, 0, 0, 0.1);
+}
+
+

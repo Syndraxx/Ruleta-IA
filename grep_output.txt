@@ -1,0 +1,68 @@
+  const hoursList = HOURS_LIST;
+    hoursList.forEach(h => {
+    const todayDraws = hoursList
+      const pDraws = hoursList
+        hoursList.forEach(h => {
+    hoursList.forEach((h, index) => {
+  }, [accumulatedResults, loteria, hoursList]);
+      return computeComprehensiveOracle(accumulatedResults, draws, loteria, selectedHour, hoursList, false);
+  }, [accumulatedResults, draws, loteria, selectedHour, hoursList]);
+      return computeComprehensiveOracle(accumulatedResults, draws, loteria, "08:00 AM", hoursList, true);
+  }, [accumulatedResults, draws, loteria, hoursList]);
+    const curIdx = hoursList.indexOf(targetHour);
+        const h = hoursList[i];
+          for (let i = hoursList.length - 1; i >= 0; i--) {
+            const h = hoursList[i];
+      const code = currentDraws[hoursList[i]];
+      hoursList.forEach((h, hIdx) => {
+          const prevH = hoursList[i];
+            const targetH = hoursList[targetIndex];
+              const targetH = hoursList[yIndex];
+          const targetH = hoursList[i];
+      for (let i = hoursList.length - 1; i >= 0; i--) {
+        if (targetDraws[hoursList[i]]) {
+        const startHourIdx = hoursList.indexOf(entry.firstRecommendHourStr);
+        for (let i = startHourIdx; i < hoursList.length; i++) {
+          const h = hoursList[i];
+            const hitHourIdx = hoursList.indexOf(h);
+  }, [fecha, loteria, draws, accumulatedResults, hoursList, varSaltoActive]);
+      hoursList.forEach(h => {
+      for (let i = hoursList.length - 1; i >= 0; i--) {
+        const code = mergedDraws[hoursList[i]];
+      hoursList.forEach(h => {
+      // Find matching hour from hoursList
+      const matchingHour = hoursList.find(h => line.toLowerCase().includes(h.toLowerCase().substring(0, 5)));
+        const curIdx = hoursList.indexOf(selectedHour) !== -1 ? hoursList.indexOf(selectedHour) : 0;
+            const h = hoursList[targetIndex];
+              const h = hoursList[yIndex];
+          const h = hoursList[i];
+          const h = hoursList[i];
+        const oracle = computeComprehensiveOracle(accumulatedResults, draws, loteria, selectedHour, hoursList);
+    hoursList.forEach((h, idx) => {
+        hoursList.forEach(h => {
+        hoursList.forEach(h => {
+        hoursList.forEach(h => {
+                {hoursList.map(h => {
+                  const curIdx = hoursList.indexOf(selectedHour);
+                    const h = hoursList[i];
+                                  const h = hoursList[tIdx];
+                                    const h = hoursList[yIdx];
+                        {hoursList.map(h => {
+                        {hoursList.map(h => {
+                  hoursList={hoursList}
+                      hoursList={hoursList}
+                  hoursList.forEach(h => {
+                            const currentHourIdx = hoursList.indexOf(slot.hourStr);
+                            const isFutureHit = hoursList.slice(currentHourIdx + 1).some(h => draws[h] === code);
+                        const currentHourIdx = hoursList.indexOf(slot.hourStr);
+                          hoursList.slice(currentHourIdx + 1).some(h => draws[h] === code)
+                          const hittingDrawHour = hoursList.slice(currentHourIdx + 1).find(h => slot.recommendations.includes(draws[h] || ""));
+                        const inT7 = item.recommendedInHours.includes(hoursList[6] || "02:00 PM");
+                        const inT8 = item.recommendedInHours.includes(hoursList[7] || "03:00 PM");
+                                    const idx = hoursList.indexOf(h);
+                                            const idx = hoursList.indexOf(h);
+                    const currentHourIdx = hoursList.indexOf(selectedHour);
+                        const h = hoursList[tIdx];
+                          const h = hoursList[yIdx];
+                    const currentIdx = hoursList.indexOf(selectedHour);
+                      const h = hoursList[i];
