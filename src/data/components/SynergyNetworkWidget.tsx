@@ -12,6 +12,7 @@ interface SynergyNetworkWidgetProps {
   onSelectBaseAnimal: (code: string) => void;
   darkMode: boolean;
   playSound: (type: string) => void;
+  draws?: Record<string, string>;
 }
 
 export const SynergyNetworkWidget: React.FC<SynergyNetworkWidgetProps> = ({
@@ -23,6 +24,7 @@ export const SynergyNetworkWidget: React.FC<SynergyNetworkWidgetProps> = ({
   onSelectBaseAnimal,
   darkMode,
   playSound,
+  draws = {},
 }) => {
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -182,7 +184,7 @@ export const SynergyNetworkWidget: React.FC<SynergyNetworkWidgetProps> = ({
   const layout = useMemo(() => {
     const center = { x: 250, y: 250 };
     const R1 = 95;  // Inner circle radius for core nodes
-    const R2 = 180; // Outer circle radius for non-core nodes
+    const R2 = 160; // Outer circle radius for non-core nodes
 
     const innerNodes = networkData.nodes.filter(n => n.isCore);
     const outerNodes = networkData.nodes.filter(n => !n.isCore);
@@ -339,22 +341,6 @@ export const SynergyNetworkWidget: React.FC<SynergyNetworkWidgetProps> = ({
         {/* LEFT COMPONENT: NETWORK SVG GRAPH */}
         <div className={`col-span-12 lg:col-span-7 flex flex-col items-center justify-center rounded-2xl border p-4 relative overflow-hidden select-none min-h-[350px] ${innerCardBgClass}`}>
           
-          {/* Legend indicators overlay inside graph */}
-          <div className="absolute top-3 left-3 flex flex-col gap-1.5 bg-[#000000]/10 dark:bg-[#000000]/40 p-2.5 rounded-xl border border-slate-800/10 backdrop-blur-sm text-[9px] font-black tracking-wider uppercase font-sans">
-            <div className="flex items-center gap-1.5 text-amber-400">
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse border border-black" />
-              <span>Base Principal (🌟)</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-purple-400">
-              <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse border border-black" />
-              <span>Sinergias Motor (🔮)</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-slate-400">
-              <span className="w-2 h-2 rounded-full bg-slate-500 border border-black" />
-              <span>Conexiones Fuertes (🔗)</span>
-            </div>
-          </div>
-
           {/* Quick reset/info overlay */}
           <div className="absolute bottom-3 right-3 text-[9px] font-mono text-slate-500 bg-[#000000]/5 dark:bg-[#000000]/30 px-2 py-1 rounded">
             Últimos 7 días activos
@@ -422,9 +408,9 @@ export const SynergyNetworkWidget: React.FC<SynergyNetworkWidgetProps> = ({
                         x2={end.x}
                         y2={end.y}
                         stroke={strokeColor}
-                        strokeWidth={strokeWidth + 5}
-                        strokeOpacity={opacity * 0.15}
-                        className="transition-all duration-300"
+                        strokeWidth={strokeWidth + 4}
+                        strokeOpacity={opacity * 0.2}
+                        className={`transition-all duration-300 ${isStrong ? "animate-pulse" : ""}`}
                       />
                     )}
                     <line
@@ -436,27 +422,8 @@ export const SynergyNetworkWidget: React.FC<SynergyNetworkWidgetProps> = ({
                       strokeWidth={strokeWidth}
                       strokeOpacity={opacity}
                       strokeDasharray={link.count === 1 ? "4 4" : undefined}
-                      className="transition-all duration-300"
+                      className={`transition-all duration-300 ${isStrong ? "animate-pulse" : ""}`}
                     />
-                    {/* Tiny visual pulse badge along the line if it is extremely strong */}
-                    {link.count >= 3 && !hoveredNodeId && (
-                      <circle
-                        r="3.5"
-                        fill="#10b981"
-                        className="animate-ping"
-                        style={{
-                          transformBox: "fill-box",
-                          transformOrigin: "center",
-                          animationDuration: `${3 - link.count * 0.4}s`
-                        }}
-                      >
-                        <animateMotion
-                          dur={`${4 - link.count * 0.5}s`}
-                          repeatCount="indefinite"
-                          path={`M ${start.x} ${start.y} L ${end.x} ${end.y}`}
-                        />
-                      </circle>
-                    )}
                   </g>
                 );
               })}
@@ -610,6 +577,22 @@ export const SynergyNetworkWidget: React.FC<SynergyNetworkWidgetProps> = ({
               })}
             </g>
           </svg>
+
+          {/* 🚥 Legend indicators bar - Moved outside to prevent overlap with the top node */}
+          <div className="flex flex-wrap items-center justify-center gap-3.5 mt-4 w-full border-t border-dashed border-slate-700/10 dark:border-slate-800/30 pt-4 text-[9px] font-black tracking-wider uppercase font-sans">
+            <div className="flex items-center gap-1.5 text-amber-500 dark:text-amber-400">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse border border-black dark:border-slate-900" />
+              <span>Base Principal (🌟)</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400">
+              <span className="w-2.5 h-2.5 rounded-full bg-purple-500 animate-pulse border border-black dark:border-slate-900" />
+              <span>Sinergias Motor (🔮)</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+              <span className="w-2.5 h-2.5 rounded-full bg-slate-500 border border-black dark:border-slate-900" />
+              <span>Conexiones Fuertes (🔗)</span>
+            </div>
+          </div>
         </div>
 
         {/* RIGHT COMPONENT: STATS & LIST OF SYNERGIES */}
@@ -694,19 +677,22 @@ export const SynergyNetworkWidget: React.FC<SynergyNetworkWidgetProps> = ({
               <div className="flex flex-col gap-2 max-h-[195px] overflow-y-auto pr-1">
                 {getAfinidadConBase.slice(0, 5).map((item, idx) => {
                   const isCoreAffiliation = coreCodes.includes(item.code);
+                  const isDrawn = Object.values(draws).includes(item.code);
                   
                   return (
                     <div
                       key={item.code}
                       onClick={() => handleNodeClick(item.code)}
                       className={`flex items-center justify-between p-2 rounded-xl border text-xs cursor-pointer transition-all hover:translate-x-1 ${
-                        isCoreAffiliation
-                          ? "bg-purple-500/5 hover:bg-purple-500/10 border-purple-500/20 text-purple-200"
-                          : darkMode
-                            ? "bg-slate-900/40 hover:bg-slate-900/80 border-slate-800"
-                            : "bg-white hover:bg-slate-100 border-slate-200"
+                        isDrawn
+                          ? "bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/35 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.1)]"
+                          : isCoreAffiliation
+                            ? "bg-purple-500/5 hover:bg-purple-500/10 border-purple-500/20 text-purple-200"
+                            : darkMode
+                              ? "bg-slate-900/40 hover:bg-slate-900/80 border-slate-800"
+                              : "bg-white hover:bg-slate-100 border-slate-200"
                       }`}
-                      title={`Fijar ${item.code} - ${item.name} como base principal`}
+                      title={`Fijar ${item.code} - ${item.name} como base principal ${isDrawn ? '(SALIÓ)' : ''}`}
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-slate-400 font-mono font-black text-[10px] bg-slate-800/10 dark:bg-slate-800/60 w-5 h-5 rounded flex items-center justify-center">
@@ -719,6 +705,12 @@ export const SynergyNetworkWidget: React.FC<SynergyNetworkWidgetProps> = ({
                         {isCoreAffiliation && (
                           <span className="text-[7.5px] font-black uppercase bg-purple-500/10 border border-purple-500/20 text-purple-400 px-1 py-0.2 rounded font-sans leading-none animate-pulse">
                             SINERGIA
+                          </span>
+                        )}
+
+                        {isDrawn && (
+                          <span className="text-[7.5px] font-black uppercase bg-emerald-500/25 border border-emerald-500/35 text-emerald-400 px-1 py-0.2 rounded font-sans leading-none animate-pulse">
+                            ✓ OK
                           </span>
                         )}
                       </div>

@@ -1665,7 +1665,7 @@ export function SistemaXTab({
                       ) : (
                         <div className="flex gap-1">
                           {log.arrastre.map((code: string, idx: number) => (
-                            <span key={idx} className="bg-amber-955/10 border border-amber-500/20 text-amber-500 px-1 py-0.5 rounded font-mono text-[9.5px] font-bold">
+                            <span key={idx} className="bg-amber-950/10 border border-amber-500/20 text-amber-500 px-1 py-0.5 rounded font-mono text-[9.5px] font-bold">
                               {code}
                             </span>
                           ))}
@@ -1675,7 +1675,7 @@ export function SistemaXTab({
                       <span className="text-[9px] font-black text-slate-500 uppercase ml-3">Recomendado:</span>
                       <div className="flex gap-1">
                         {log.suggestedPlay.map((code: string, idx: number) => (
-                          <span key={idx} className="bg-emerald-955/20 border border-emerald-500/25 text-emerald-300 px-1.5 py-0.5 rounded font-mono text-[10px] font-extrabold">
+                          <span key={idx} className="bg-emerald-950/20 border border-emerald-500/25 text-emerald-300 px-1.5 py-0.5 rounded font-mono text-[10px] font-extrabold">
                             {code}
                           </span>
                         ))}

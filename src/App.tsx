@@ -180,7 +180,9 @@ export function AnimalOfflineSticker({
   isDrawn = false, 
   isScraped = false,
   showLabel = true,
-  className = "" 
+  className = "",
+  trafficLightColor,
+  onCycleTrafficLight
 }: { 
   code: string; 
   size?: "sm" | "md" | "lg" | "xl"; 
@@ -189,6 +191,8 @@ export function AnimalOfflineSticker({
   isScraped?: boolean;
   showLabel?: boolean;
   className?: string;
+  trafficLightColor?: "gray" | "green" | "yellow" | "red";
+  onCycleTrafficLight?: (e: React.MouseEvent) => void;
 }) {
   const meta = ANIMALITOS[code];
   if (!meta) {
@@ -237,6 +241,15 @@ export function AnimalOfflineSticker({
   if (isSelected) {
     cardGradient = "from-[#d97706] via-[#b45309] to-[#78350f]";
     borderGlow = "border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.35)]";
+  } else if (trafficLightColor === "green") {
+    cardGradient = "from-[#047857] via-[#065f46] to-[#022c22]";
+    borderGlow = "border-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.35)]";
+  } else if (trafficLightColor === "yellow") {
+    cardGradient = "from-[#eab308] via-[#ca8a04] to-[#713f12]";
+    borderGlow = "border-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.4)]";
+  } else if (trafficLightColor === "red") {
+    cardGradient = "from-[#be123c] via-[#9f1239] to-[#4c0519]";
+    borderGlow = "border-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.35)]";
   } else if (isDrawn) {
     if (isScraped) {
       cardGradient = "from-[#047857] via-[#065f46] to-[#022c22]";
@@ -268,7 +281,7 @@ export function AnimalOfflineSticker({
 
   return (
     <div 
-      className={`relative rounded-2xl border-2 flex flex-col items-center justify-center p-1.5 transition-all duration-300 overflow-hidden group select-none text-white ${className}`}
+      className={`relative rounded-2xl border-2 flex flex-col items-center justify-center p-1.5 transition-all duration-300 overflow-hidden group select-none text-white ${borderGlow} ${className}`}
       style={{
         aspectRatio: "1/1",
         background: `linear-gradient(135deg, ${cardGradient.replace(/via|to|from/g, "").split(" ").filter(Boolean).join(", ")})`
@@ -285,7 +298,40 @@ export function AnimalOfflineSticker({
 
       {/* Gold stars to make it feel premium */}
       <div className="absolute top-1 left-1.5 text-[7px] font-mono font-bold text-white/40">★ {formattedCode}</div>
-      <div className="absolute top-1 right-1.5 text-[7px] font-mono font-bold text-white/40">★</div>
+      
+      {/* 🚦 Semáforo Interactive Badge, replacing the plain star */}
+      {onCycleTrafficLight ? (
+        <button
+          type="button"
+          onClick={onCycleTrafficLight}
+          className={`absolute top-1 right-1.5 w-3.5 h-3.5 rounded-full border shadow-sm z-30 cursor-pointer hover:scale-125 transition-all flex items-center justify-center bg-black/25 ${
+            trafficLightColor === "green"
+              ? "bg-emerald-500 border-emerald-400 shadow-[0_0_5px_rgba(16,185,129,0.5)]"
+              : trafficLightColor === "yellow"
+                ? "bg-amber-400 border-amber-300 shadow-[0_0_5px_rgba(251,191,36,0.5)]"
+                : trafficLightColor === "red"
+                  ? "bg-rose-500 border-rose-400 shadow-[0_0_5px_rgba(244,63,94,0.5)]"
+                  : "bg-slate-500/40 border-slate-400/40"
+          }`}
+          title="Semáforo: Haz clic para cambiar color"
+        >
+          {(!trafficLightColor || trafficLightColor === "gray") && (
+            <span className="w-1 h-1 rounded-full bg-slate-300/80" />
+          )}
+        </button>
+      ) : (
+        <div
+          className={`absolute top-1 right-1.5 w-3 h-3 rounded-full border z-30 ${
+            trafficLightColor === "green"
+              ? "bg-emerald-500 border-emerald-400"
+              : trafficLightColor === "yellow"
+                ? "bg-amber-400 border-amber-300"
+                : trafficLightColor === "red"
+                  ? "bg-rose-500 border-rose-400"
+                  : "bg-slate-500/40 border-slate-400/40"
+          }`}
+        />
+      )}
 
       {/* Glossy card gleam overlay */}
       <div className="absolute inset-0 pointer-events-none bg-gradient-to-tr from-white/10 via-transparent to-white/10 opacity-50 z-10" />
@@ -313,6 +359,36 @@ export default function App() {
   const [loteria, setLoteria] = useState<"Loto Activo" | "La Granjita">("Loto Activo");
   const [showRegistry, setShowRegistry] = useState(false);
   const [showAuditor, setShowAuditor] = useState(false);
+
+  // 🚦 Global Traffic Light (Semáforo) state for all animalitos
+  const [trafficLightColors, setTrafficLightColors] = useState<Record<string, "gray" | "green" | "yellow" | "red">>(() => {
+    try {
+      const saved = localStorage.getItem("animal_traffic_lights");
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  const handleCycleTrafficLight = (code: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    playSound("click");
+    const colors: Array<"gray" | "green" | "yellow" | "red"> = ["gray", "green", "yellow", "red"];
+    const current = trafficLightColors[code] || "gray";
+    const nextIdx = (colors.indexOf(current) + 1) % colors.length;
+    const nextColor = colors[nextIdx];
+    
+    const updated = { ...trafficLightColors, [code]: nextColor };
+    setTrafficLightColors(updated);
+    try {
+      localStorage.setItem("animal_traffic_lights", JSON.stringify(updated));
+    } catch (err) {
+      console.error("Error saving traffic lights:", err);
+    }
+  };
 
   // Modern custom modal alert / confirm state
   const [modalNotification, setModalNotification] = useState<{
@@ -5293,6 +5369,64 @@ export default function App() {
     if (code !== "BORRAR") {
       setBaseAnimal(code);
       addToAgentHistorial(hour, code);
+
+      // --- SENSATIONAL AUTOMATIC HIT DETECTION & CELEBRATION ---
+      try {
+        const currentMeta = ANIMALITOS[code];
+        const emoji = currentMeta?.emoji || "🐾";
+        const name = currentMeta?.name || "";
+
+        // 1. Direct hour suggestion hit
+        const hourlyForecast = hourlyStatsList.find(s => s.hourStr === hour);
+        const suggestedCode = hourlyForecast?.forecast.code || "";
+        const isDirectHit = code === suggestedCode;
+
+        // 2. Oracle hit
+        const oracleCodes = (automatedUnifiedForecast || []).map(f => f.code);
+        const isOracleHit = oracleCodes.includes(code);
+        const oracleMatchedItem = (automatedUnifiedForecast || []).find(f => f.code === code);
+
+        // 3. Expert analyst hit
+        const expertCodes = (analistaExpertData?.top_pronosticos_dia || []).map((p: any) => p.numero);
+        const isExpertHit = expertCodes.includes(code);
+        const expertMatchedItem = (analistaExpertData?.top_pronosticos_dia || []).find((p: any) => p.numero === code);
+
+        // 4. Motor predictivo (from recommendations)
+        const { recommendations: retroRecs } = getRecommendationsForHour(hour, draws, fecha);
+        const isMotorHit = retroRecs.includes(code);
+
+        if (isDirectHit || isOracleHit || isExpertHit || isMotorHit) {
+          setTimeout(() => {
+            playSound("success");
+            
+            let hitTitle = "🎉 ¡EXCELENTE ACIERTO! 🎉";
+            let hitDetails = "";
+
+            if (isDirectHit) {
+              hitTitle = "🎉 ¡ACIERTO DIRECTO PRIORITARIO! 🎉";
+              hitDetails = `¡Excelente puntería! El animalito ingresado coincide exactamente con la sugerencia prioritaria para las ${hour}: \n👉 [${code}] ${name} ${emoji}.`;
+            } else if (isOracleHit && oracleMatchedItem) {
+              hitTitle = "🎉 ¡ACIERTO DEL ORÁCULO DE HOY! 🎉";
+              hitDetails = `¡Fabuloso! El animalito [${code}] ${name} ${emoji} coincide con la sugerencia del ORÁCULO PRINCIPAL de alta probabilidad del día (${oracleMatchedItem.type}).`;
+            } else if (isExpertHit && expertMatchedItem) {
+              hitTitle = "🎉 ¡ACIERTO DEL ANALISTA EXPERTO! 🎉";
+              hitDetails = `¡Impresionante! El animalito [${code}] ${name} ${emoji} coincide con el Pronóstico del Analista Experto del Día sugerido hoy con un ${expertMatchedItem.probabilidad_porcentaje}% de confianza.`;
+            } else if (isMotorHit) {
+              hitTitle = "🎉 ¡ACIERTO DEL MOTOR PREDICTIVO! 🎉";
+              hitDetails = `¡Excelente! El animalito [${code}] ${name} ${emoji} es uno de los sugeridos por el Motor Predictivo de Arrastre de esta hora.`;
+            }
+
+            triggerModalAlert(
+              hitTitle,
+              `¡FELICIDADES! Has logrado un acierto confirmado por el sistema para el sorteo de las ${hour}.\n\nResultado Registrado:\n✨ [${code}] - ${name} ${emoji} ✨\n\n${hitDetails}`,
+              "success"
+            );
+          }, 150);
+        }
+      } catch (e) {
+        console.error("Error evaluating real-time hit:", e);
+      }
+      // --------------------------------------------------------
     } else {
       try {
         const actual = localStorage.getItem("historial_agente");
@@ -6202,8 +6336,8 @@ export default function App() {
         />
 
         {/* NAVEGACIÓN EN PÁGINAS Y SECCIONES (Fijada abajo) */}
-        <div id="navigation-tabs" className={`fixed bottom-4 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:max-w-4xl z-50 p-2 rounded-2xl grid grid-cols-7 gap-1 sm:gap-1.5 shadow-2xl backdrop-blur-md select-none transition-all duration-150 ${
-          darkMode ? "bg-[#111726]/95 border-2 border-slate-600 text-white" : "bg-white/95 border-4 border-black comic-shadow"
+        <div id="navigation-tabs" className={`fixed bottom-4 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:max-w-4xl z-50 p-2 rounded-2xl grid grid-cols-7 gap-1 sm:gap-1.5 shadow-2xl backdrop-blur-md select-none transition-all duration-150 ring-1 ${
+          darkMode ? "bg-[#0b0f19]/95 border-2 border-slate-700 ring-slate-800 text-white" : "bg-white/95 border-4 border-black comic-shadow"
         }`}>
           <motion.button
             whileHover={{ scale: 1.03, rotate: -1.2 }}
@@ -6212,7 +6346,7 @@ export default function App() {
             className={`py-2 px-0.5 sm:p-2.5 rounded-xl font-extrabold text-[10px] sm:text-[12px] md:text-[14px] uppercase tracking-wider flex flex-col md:flex-row items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
               activeTab === "panel"
                 ? darkMode
-                  ? "bg-blue-950/70 text-blue-200 border-2 border-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.35)]"
+                  ? "bg-[#172554]/90 text-blue-100 border-2 border-blue-400 shadow-[0_0_6px_rgba(59,130,246,0.5)]"
                   : "bg-blue-600 text-white border-2 border-black font-black comic-shadow-small"
                 : darkMode
                   ? "text-slate-400 hover:text-white hover:bg-[#182033]"
@@ -6222,7 +6356,7 @@ export default function App() {
             <span className="text-sm sm:text-base md:text-lg">📊</span>
             <span className="truncate leading-none">Panel</span>
           </motion.button>
-
+ 
           <motion.button
             whileHover={{ scale: 1.03, rotate: 1.2 }}
             whileTap={{ scale: 0.95, rotate: -1.2 }}
@@ -6230,7 +6364,7 @@ export default function App() {
             className={`py-2 px-0.5 sm:p-2.5 rounded-xl font-extrabold text-[10px] sm:text-[12px] md:text-[14px] uppercase tracking-wider flex flex-col md:flex-row items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
               activeTab === "oracle"
                 ? darkMode
-                  ? "bg-purple-950/70 text-purple-200 border-2 border-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.35)]"
+                  ? "bg-[#3b0764]/90 text-purple-100 border-2 border-purple-400 shadow-[0_0_6px_rgba(168,85,247,0.5)]"
                   : "bg-[#8b5cf6] text-white border-2 border-black font-black comic-shadow-small"
                 : darkMode
                   ? "text-slate-400 hover:text-white hover:bg-[#182033]"
@@ -6240,7 +6374,7 @@ export default function App() {
             <span className="text-sm sm:text-base md:text-lg">🪐</span>
             <span className="truncate leading-none">Oráculo</span>
           </motion.button>
-
+ 
           <motion.button
             whileHover={{ scale: 1.03, rotate: 1.2 }}
             whileTap={{ scale: 0.95, rotate: -1.2 }}
@@ -6248,7 +6382,7 @@ export default function App() {
             className={`py-2 px-0.5 sm:p-2.5 rounded-xl font-extrabold text-[10px] sm:text-[12px] md:text-[14px] uppercase tracking-wider flex flex-col md:flex-row items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
               activeTab === "trilogy"
                 ? darkMode
-                  ? "bg-amber-950/70 text-amber-200 border-2 border-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.35)]"
+                  ? "bg-[#78350f]/90 text-amber-100 border-2 border-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.5)]"
                   : "bg-amber-400 text-black border-2 border-black font-black comic-shadow-small"
                 : darkMode
                   ? "text-slate-400 hover:text-white hover:bg-[#182033]"
@@ -6258,7 +6392,7 @@ export default function App() {
             <span className="text-sm sm:text-base md:text-lg">🔮</span>
             <span className="truncate leading-none">Trilogías</span>
           </motion.button>
-
+ 
           <motion.button
             whileHover={{ scale: 1.03, rotate: -1.2 }}
             whileTap={{ scale: 0.95, rotate: 1.2 }}
@@ -6266,7 +6400,7 @@ export default function App() {
             className={`py-2 px-0.5 sm:p-2.5 rounded-xl font-extrabold text-[10px] sm:text-[12px] md:text-[14px] uppercase tracking-wider flex flex-col md:flex-row items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
               activeTab === "predicciones"
                 ? darkMode
-                  ? "bg-indigo-950/70 text-indigo-200 border-2 border-indigo-400 shadow-[0_0_8px_rgba(99,102,241,0.35)]"
+                  ? "bg-[#1e1b4b]/90 text-indigo-100 border-2 border-indigo-400 shadow-[0_0_6px_rgba(99,102,241,0.5)]"
                   : "bg-indigo-600 text-white border-2 border-black font-black comic-shadow-small"
                 : darkMode
                   ? "text-slate-400 hover:text-white hover:bg-[#182033]"
@@ -6276,7 +6410,7 @@ export default function App() {
             <span className="text-sm sm:text-base md:text-lg">📈</span>
             <span className="truncate leading-none">Monitor IA</span>
           </motion.button>
-
+ 
           <motion.button
             whileHover={{ scale: 1.03, rotate: -1.2 }}
             whileTap={{ scale: 0.95, rotate: 1.2 }}
@@ -6284,7 +6418,7 @@ export default function App() {
             className={`py-2 px-0.5 sm:p-2.5 rounded-xl font-extrabold text-[10px] sm:text-[12px] md:text-[14px] uppercase tracking-wider flex flex-col md:flex-row items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
               activeTab === "control"
                 ? darkMode
-                  ? "bg-purple-950/70 text-purple-200 border-2 border-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.35)]"
+                  ? "bg-[#3b0764]/90 text-purple-100 border-2 border-purple-400 shadow-[0_0_6px_rgba(168,85,247,0.5)]"
                   : "bg-[#8b5cf6] text-white border-2 border-black font-black comic-shadow-small"
                 : darkMode
                   ? "text-slate-400 hover:text-white hover:bg-[#182033]"
@@ -6294,7 +6428,7 @@ export default function App() {
             <span className="text-sm sm:text-base md:text-lg">🧠</span>
             <span className="truncate leading-none">IA Maestra</span>
           </motion.button>
-
+ 
           <motion.button
             whileHover={{ scale: 1.03, rotate: 1.2 }}
             whileTap={{ scale: 0.95, rotate: -1.2 }}
@@ -6302,7 +6436,7 @@ export default function App() {
             className={`py-2 px-0.5 sm:p-2.5 rounded-xl font-extrabold text-[10px] sm:text-[12px] md:text-[14px] uppercase tracking-wider flex flex-col md:flex-row items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
               activeTab === "sistemax"
                 ? darkMode
-                  ? "bg-emerald-950/70 text-emerald-200 border-2 border-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.35)]"
+                  ? "bg-[#022c22]/90 text-emerald-100 border-2 border-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.5)]"
                   : "bg-emerald-600 text-white border-2 border-black font-black comic-shadow-small"
                 : darkMode
                   ? "text-slate-400 hover:text-white hover:bg-[#182033]"
@@ -6312,7 +6446,7 @@ export default function App() {
             <span className="text-sm sm:text-base md:text-lg font-bold">⚡</span>
             <span className="truncate leading-none">Sistema X</span>
           </motion.button>
-
+ 
           <motion.button
             whileHover={{ scale: 1.03, rotate: -1.2 }}
             whileTap={{ scale: 0.95, rotate: 1.2 }}
@@ -6320,7 +6454,7 @@ export default function App() {
             className={`py-2 px-0.5 sm:p-2.5 rounded-xl font-extrabold text-[10px] sm:text-[12px] md:text-[14px] uppercase tracking-wider flex flex-col md:flex-row items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
               activeTab === "agente_ia"
                 ? darkMode
-                  ? "bg-indigo-950/70 text-indigo-200 border-2 border-indigo-400 shadow-[0_0_8px_rgba(99,102,241,0.35)]"
+                  ? "bg-[#1e1b4b]/90 text-indigo-100 border-2 border-indigo-400 shadow-[0_0_6px_rgba(99,102,241,0.5)]"
                   : "bg-indigo-600 text-white border-2 border-black font-black comic-shadow-small"
                 : darkMode
                   ? "text-slate-400 hover:text-white hover:bg-[#182033]"
@@ -6479,6 +6613,8 @@ export default function App() {
                                   isDrawn={true} 
                                   isScraped={isReal} 
                                   className="w-full max-w-[85px]"
+                                  trafficLightColor={trafficLightColors[code]}
+                                  onCycleTrafficLight={(e) => handleCycleTrafficLight(code, e)}
                                 />
                               </div>
                             ) : (
@@ -6489,6 +6625,8 @@ export default function App() {
                                       code={suggestedCode} 
                                       size="md" 
                                       className="w-full max-w-[85px] opacity-45 grayscale group-hover:grayscale-0 group-hover:opacity-100 transition-all"
+                                      trafficLightColor={trafficLightColors[suggestedCode]}
+                                      onCycleTrafficLight={(e) => handleCycleTrafficLight(suggestedCode, e)}
                                     />
                                   </div>
                                 ) : (
@@ -6660,32 +6798,96 @@ export default function App() {
                   const suggestedCode = hourlyForecast?.forecast.code || "";
                   const suggestedMeta = suggestedCode ? ANIMALITOS[suggestedCode] : null;
 
-                  // Check relationship
+                  // 1. Get retrospective predictions of the motor
+                  const { recommendations: retroRecs, prevCode: retroPrevCode, prevHourLabel: retroPrevHourLabel } = getRecommendationsForHour(selectedHour, draws, fecha);
+                  const isHit = retroRecs.includes(currentDrawCode);
+
+                  // 2. Check Oracle Principal 3-number forecast hits
+                  const oracleCodes = (automatedUnifiedForecast || []).map(f => f.code);
+                  const isOracleHit = oracleCodes.includes(currentDrawCode);
+                  const oracleMatchedItem = (automatedUnifiedForecast || []).find(f => f.code === currentDrawCode);
+
+                  // 3. Check Expert Analyst predictions
+                  const expertCodes = (analistaExpertData?.top_pronosticos_dia || []).map((p: any) => p.numero);
+                  const isExpertHit = expertCodes.includes(currentDrawCode);
+                  const expertMatchedItem = (analistaExpertData?.top_pronosticos_dia || []).find((p: any) => p.numero === currentDrawCode);
+
+                  // Check relationship definitions
                   const isDirectHit = currentDrawCode === suggestedCode;
+                  
+                  // Standard trilogy relationships
                   const isTrilogyRelation = suggestedCode 
                     ? getStandardTrilogy(currentDrawCode).includes(suggestedCode) || getStandardTrilogy(suggestedCode).includes(currentDrawCode)
                     : false;
 
-                  // Generate custom list of how and why
-                  let statusLabel = "⏳ DE CERQUITA";
-                  let statusBadgeStyle = "bg-slate-500/10 border-slate-550/20 text-slate-400";
-                  let hitDescription = "Esta vez no coincidieron directamente en esta hora. ¡Pero ten paciencia, la ruleta da vueltas y estos compañeros se siguen atrayendo!";
+                  const isMotorTrilogyRelation = retroRecs.some(code => 
+                    getStandardTrilogy(code).includes(currentDrawCode) || getStandardTrilogy(currentDrawCode).includes(code)
+                  );
+                  const motorTrilogyPartnerCode = retroRecs.find(code => 
+                    getStandardTrilogy(code).includes(currentDrawCode) || getStandardTrilogy(currentDrawCode).includes(code)
+                  );
+                  const motorTrilogyPartnerMeta = motorTrilogyPartnerCode ? ANIMALITOS[motorTrilogyPartnerCode] : null;
 
-                  if (isDirectHit) {
-                    statusLabel = "🎯 ¡ACIERTO DIRECTO EXITOSO!";
-                    statusBadgeStyle = "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 animate-pulse font-extrabold";
-                    hitDescription = "¡Qué gran puntería! Salió exactamente el animalito que estaba recomendado para este sorteo.";
+                  // Custom trilogies / families
+                  const customTrilogies = suggestedCode ? (TRILOGIAS_PERSONALIZADAS[suggestedCode] || []) : [];
+                  const isCustomTrilogyRelation = customTrilogies.some(list => list.includes(currentDrawCode));
+
+                  const isMotorCustomRelation = retroRecs.some(code => 
+                    (TRILOGIAS_PERSONALIZADAS[code] || []).some(list => list.includes(currentDrawCode))
+                  );
+                  const motorCustomPartnerCode = retroRecs.find(code => 
+                    (TRILOGIAS_PERSONALIZADAS[code] || []).some(list => list.includes(currentDrawCode))
+                  );
+                  const motorCustomPartnerMeta = motorCustomPartnerCode ? ANIMALITOS[motorCustomPartnerCode] : null;
+
+                  // Helper for custom family label
+                  const getFamilyLabelInSpanish = (code: string) => {
+                    const unpadded = (code === "00" || code === "0") ? code : parseInt(code, 10).toString();
+                    if (FAMILIAS.acuaticos.includes(unpadded)) return "Acuáticos";
+                    if (FAMILIAS.felinos_salvajes.includes(unpadded)) return "Felinos Salvajes";
+                    if (FAMILIAS.plumas.includes(unpadded)) return "Plumas (Aves)";
+                    if (FAMILIAS.corredores.includes(unpadded)) return "Corredores (Terrestres)";
+                    if (FAMILIAS.pequenos_rastreros.includes(unpadded)) return "Pequeños y Rastreros";
+                    return "General";
+                  };
+
+                  // Determine status labels, badge style and comprehensive description
+                  let statusLabel = "🔍 EVALUADO (S/C)";
+                  let statusBadgeStyle = "bg-slate-800 border-slate-700 text-slate-400";
+                  let hitDescription = `El resultado ${currentMeta?.emoji} ${currentMeta?.name} (${currentDrawCode}) fue analizado con éxito. Esta vez no coincidió directamente con las sugerencias para esta hora. ¡Sigue con atención el flujo de probabilidades de la ruleta!`;
+
+                  if (isOracleHit && oracleMatchedItem) {
+                    statusLabel = "🎯 ¡ACIERTO DEL ORÁCULO DE HOY!";
+                    statusBadgeStyle = "bg-emerald-500/10 border-emerald-500/40 text-emerald-300 animate-pulse font-black shadow-[0_0_15px_rgba(16,185,129,0.3)] ring-1 ring-emerald-500/30";
+                    hitDescription = `¡FANTÁSTICO ACIERTO! El animalito ${currentMeta?.emoji} ${currentMeta?.name} (${currentDrawCode}) salió y estaba recomendado en el ORÁCULO PRINCIPAL de los 3 con mayor probabilidad de hoy (${oracleMatchedItem.type}).`;
+                  } else if (isExpertHit && expertMatchedItem) {
+                    statusLabel = "🎯 ¡ACIERTO DEL ANALISTA EXPERTO!";
+                    statusBadgeStyle = "bg-emerald-500/10 border-emerald-500/40 text-emerald-300 animate-pulse font-black shadow-[0_0_15px_rgba(16,185,129,0.3)] ring-1 ring-emerald-500/30";
+                    hitDescription = `¡IMPRESIONANTE PUNTERÍA! El animalito ${currentMeta?.emoji} ${currentMeta?.name} (${currentDrawCode}) salió y coincide exactamente con el PRONÓSTICO DEL ANALISTA EXPERTO DEL DÍA sugerido para hoy con un ${expertMatchedItem.probabilidad_porcentaje}% de confianza.`;
+                  } else if (isDirectHit) {
+                    statusLabel = "🎯 ¡ACIERTO DIRECTO PRIORITARIO!";
+                    statusBadgeStyle = "bg-emerald-500/10 border-emerald-500/40 text-[#4ADE80] animate-pulse font-black shadow-[0_0_12px_rgba(16,185,129,0.25)]";
+                    hitDescription = `¡QUÉ GRAN PUNTERÍA! Salió exactamente el animalito ${currentMeta?.emoji} ${currentMeta?.name} (${currentDrawCode}) que estaba recomendado de forma prioritaria para este sorteo de las ${selectedHour}.`;
+                  } else if (isHit) {
+                    statusLabel = "🎯 ¡ACIERTO DEL MOTOR PREDICTIVO!";
+                    statusBadgeStyle = "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 animate-pulse font-black shadow-[0_0_12px_rgba(16,185,129,0.25)]";
+                    hitDescription = `¡QUÉ GRAN ÉXITO! Salió ${currentMeta?.emoji} ${currentMeta?.name} (${currentDrawCode}), uno de los 4 animales fuertemente sugeridos por el Motor Predictivo de Arrastre para este sorteo.`;
                   } else if (isTrilogyRelation) {
                     statusLabel = "🌀 ¡SALIÓ UN COMPAÑERO DE TRILOGÍA!";
                     statusBadgeStyle = "bg-blue-500/10 border-blue-500/30 text-blue-400 font-extrabold";
-                    hitDescription = "¡Muy cerca! Aunque no salió la predicción exacta, salió uno de sus compañeros inseparables de grupo. ¡Eso significa que la suerte está en la zona!";
-                  } else {
-                    const customTrilogies = TRILOGIAS_PERSONALIZADAS[suggestedCode] || [];
-                    const isCustomTrilogyRelation = customTrilogies.some(list => list.includes(currentDrawCode));
-                    if (isCustomTrilogyRelation) {
-                      statusLabel = "⚡ ¡SALIÓ UN COMPAÑERO DE FAMILIA!";
-                      statusBadgeStyle = "bg-amber-550/10 border-amber-500/30 text-amber-400 font-extrabold";
-                    }
+                    hitDescription = `¡Muy cerca! Aunque no salió la predicción exacta prioritaria, salió ${currentMeta?.emoji} ${currentMeta?.name} (${currentDrawCode}), que es compañero inseparable de grupo del animal recomendado principal (${suggestedMeta?.name}). ¡Eso significa que la suerte está en la zona!`;
+                  } else if (isMotorTrilogyRelation && motorTrilogyPartnerMeta) {
+                    statusLabel = "🌀 ¡COMPAÑERO DE TRILOGÍA DEL MOTOR! (DE CERQUITA)";
+                    statusBadgeStyle = "bg-blue-500/10 border-blue-500/30 text-blue-400 font-extrabold animate-pulse";
+                    hitDescription = `¡Casi acertamos! Salió el animalito ${currentMeta?.emoji} ${currentMeta?.name} (${currentDrawCode}), que es compañero de grupo inseparable del animal ${motorTrilogyPartnerMeta.emoji} ${motorTrilogyPartnerMeta.name} (${motorTrilogyPartnerCode}), el cual estaba fuertemente recomendado por el motor predictivo para este sorteo.`;
+                  } else if (isCustomTrilogyRelation) {
+                    statusLabel = "⚡ ¡SALIÓ UN COMPAÑERO DE FAMILIA!";
+                    statusBadgeStyle = "bg-amber-550/10 border-amber-500/30 text-amber-400 font-extrabold";
+                    hitDescription = `¡Por muy poco! Salió un animal del mismo círculo de afinidades del recomendado principal. ¡Sigue con atención este grupo de animales!`;
+                  } else if (isMotorCustomRelation && motorCustomPartnerMeta) {
+                    statusLabel = "⚡ ¡COMPAÑERO DE FAMILIA DEL MOTOR!";
+                    statusBadgeStyle = "bg-amber-550/10 border-amber-500/30 text-amber-400 font-extrabold";
+                    hitDescription = `¡En la zona! Salió el animalito ${currentMeta?.emoji} ${currentMeta?.name} (${currentDrawCode}), que pertenece al círculo de affinities de ${motorCustomPartnerMeta.emoji} ${motorCustomPartnerMeta.name} (${motorCustomPartnerCode}), el cual estaba recomendado por el motor predictivo.`;
                   }
 
                   return (
@@ -6709,9 +6911,7 @@ export default function App() {
 
                       {/* RETROSPECTIVE MOTOR PREDICTIVO (4 CARDS FOR DRAWN HOUR) */}
                       {(() => {
-                        const { recommendations: retroRecs, prevCode: retroPrevCode, prevHourLabel: retroPrevHourLabel } = getRecommendationsForHour(selectedHour, draws, fecha);
                         const retroPrevMeta = retroPrevCode ? ANIMALITOS[retroPrevCode] : null;
-                        const isHit = retroRecs.includes(currentDrawCode);
 
                         return (
                           <div className="bg-[#0f172a]/30 border border-slate-800/60 p-4 rounded-xl flex flex-col gap-3">
@@ -6722,9 +6922,19 @@ export default function App() {
                               <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
                                 isHit 
                                   ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 animate-pulse" 
-                                  : "bg-slate-800 border border-slate-700 text-slate-400"
+                                  : isMotorTrilogyRelation
+                                    ? "bg-blue-500/15 border border-blue-500/30 text-blue-400"
+                                    : isMotorCustomRelation
+                                      ? "bg-amber-500/15 border border-amber-500/30 text-amber-400"
+                                      : "bg-slate-800 border border-slate-700 text-slate-400"
                               }`}>
-                                {isHit ? "🎯 ¡ACERTÓ EL MOTOR!" : "⏳ EVALUADO"}
+                                {isHit 
+                                  ? "🎯 ¡ACERTÓ EL MOTOR!" 
+                                  : isMotorTrilogyRelation 
+                                    ? "🌀 TRILOGÍA DE CERQUITA" 
+                                    : isMotorCustomRelation 
+                                      ? "⚡ FAMILIA DE CERQUITA" 
+                                      : "⏳ EVALUADO"}
                               </span>
                             </div>
 
@@ -6785,6 +6995,14 @@ export default function App() {
                             {isHit ? (
                               <div className="bg-emerald-950/30 border border-emerald-900/55 p-3 rounded-xl leading-relaxed font-sans text-xs text-left text-[#4ADE80]">
                                 <strong>🎯 ¡ACERTÓ EL ANIMAL RECOMENDADO ANTES!</strong> El motor predictivo detectó la inercia perfectamente al proponer el <strong>{currentMeta?.name} ({currentDrawCode})</strong> para este sorteo de las {selectedHour}. ¡Un acierto de alta precisión!
+                              </div>
+                            ) : isMotorTrilogyRelation && motorTrilogyPartnerMeta ? (
+                              <div className="bg-blue-950/30 border border-blue-900/55 p-3 rounded-xl leading-relaxed font-sans text-xs text-left text-blue-300">
+                                <strong>🌀 ¡COMPAÑERO DE TRILOGÍA DEL MOTOR! (DE CERQUITA)</strong> Salió el <strong>{currentMeta?.name} ({currentDrawCode})</strong>, que es compañero de grupo inseparable de <strong>{motorTrilogyPartnerMeta.name} ({motorTrilogyPartnerCode})</strong>, el cual estaba recomendado en las tarjetas de arriba. ¡La inercia estuvo sumamente cerca de consolidarse!
+                              </div>
+                            ) : isMotorCustomRelation && motorCustomPartnerMeta ? (
+                              <div className="bg-amber-950/20 border border-amber-900/40 p-3 rounded-xl leading-relaxed font-sans text-xs text-left text-amber-300">
+                                <strong>⚡ ¡COMPAÑERO DE FAMILIA DEL MOTOR!</strong> Salió el <strong>{currentMeta?.name} ({currentDrawCode})</strong>, que es del círculo de afinidades de <strong>{motorCustomPartnerMeta.name} ({motorCustomPartnerCode})</strong>, sugerido por el motor. ¡La probabilidad está rondando la zona!
                               </div>
                             ) : (
                               <div className="bg-slate-900/35 border border-slate-800/70 p-2.5 rounded-xl leading-relaxed font-sans text-[11px] text-left text-slate-400">
@@ -6917,7 +7135,7 @@ export default function App() {
                             </div>
                             <ul className="list-disc list-inside space-y-2 text-slate-200 text-xs md:text-sm leading-relaxed">
                               <li><strong>Racha Acumulada:</strong> El animalito ganador <strong>{currentDrawCode} - {currentMeta?.name}</strong> tenía ya varios sorteos sin salir, lo que lo hacía súper fuerte para aparecer.</li>
-                              <li><strong>Fuerza de Grupo:</strong> La familia de este animalito ({FAMILIAS[currentDrawCode] || 'General'}) estaba en su hora de mayor fuerza del día, empujando la ruleta a su favor.</li>
+                              <li><strong>Fuerza de Grupo:</strong> La familia de este animalito (<strong>{getFamilyLabelInSpanish(currentDrawCode)}</strong>) estaba en su hora de mayor fuerza del día, empujando la ruleta a su favor.</li>
                               <li><strong>Frecuencia Horaria:</strong> El horario de las {selectedHour} suele ser de los preferidos históricamente para que salga este animalito en las jugadas tradicionales.</li>
                             </ul>
                           </div>
@@ -7038,7 +7256,23 @@ export default function App() {
                             oracleData={selectedHourOracle}
                             selectedHour={selectedHour}
                             darkMode={darkMode}
-                            isFuture={new Date(`2026-06-24T${selectedHour.replace(' AM', ':00').replace(' PM', ':00')}`).getTime() > new Date().getTime()}
+                            draws={draws}
+                            isFuture={(() => {
+                              try {
+                                const todayStr = new Date().toISOString().split("T")[0];
+                                if (fecha < todayStr) return false;
+                                if (fecha > todayStr) return true;
+                                const [time, modifier] = selectedHour.split(" ");
+                                let [hours, minutes] = time.split(":").map(Number);
+                                if (modifier === "PM" && hours < 12) hours += 12;
+                                if (modifier === "AM" && hours === 12) hours = 0;
+                                const targetDate = new Date();
+                                targetDate.setHours(hours, minutes, 0, 0);
+                                return targetDate.getTime() > new Date().getTime();
+                              } catch (e) {
+                                return false;
+                              }
+                            })()}
                             onDeleteRecord={() => {
                                 const confirmDelete = window.confirm(`¿Eliminar sorteo ${selectedHour} del registro?`);
                                 if (confirmDelete) {
@@ -7492,6 +7726,7 @@ export default function App() {
                           oracleData={selectedHourOracle}
                           selectedHour={selectedHour}
                           darkMode={darkMode}
+                          draws={draws}
                           isFuture={true}
                           onDeleteRecord={() => {
                             const confirmDelete = window.confirm(`¿Eliminar sorteo ${selectedHour} del registro?`);
@@ -8467,7 +8702,7 @@ export default function App() {
                             className="bg-slate-950/50 p-3 rounded-lg border border-slate-800/60 hover:border-emerald-500/25 transition-all flex flex-col md:flex-row gap-3.5 items-start md:items-center justify-between"
                           >
                             <div className="flex items-center gap-2.5 shrink-0">
-                              <span className="bg-emerald-955/45 border border-emerald-900/40 text-emerald-400 text-[9px] font-black font-mono px-2 py-0.5 rounded leading-none select-none">
+                              <span className="bg-emerald-950/45 border border-emerald-900/40 text-emerald-400 text-[9px] font-black font-mono px-2 py-0.5 rounded leading-none select-none">
                                 {hit.hour.replace(":00 ", " ")}
                               </span>
                               <span className="text-2xl leading-none">{hit.emoji}</span>
@@ -8511,15 +8746,26 @@ export default function App() {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 mt-1">
                   {automatedUnifiedForecast.map((forecastItem, idx) => {
+                    const isDrawn = Object.values(draws).includes(forecastItem.code);
                     const fallbackColor = idx === 0 ? "border-emerald-500/30 bg-emerald-950/5" : idx === 1 ? "border-amber-500/30 bg-amber-950/5" : "border-indigo-500/30 bg-indigo-950/5";
                     const fallbackBadge = idx === 0 ? "bg-emerald-500/20 text-emerald-400 border-emerald-900" : idx === 1 ? "bg-amber-500/20 text-amber-500 text-yellow-405 border-amber-900" : "bg-indigo-500/20 text-indigo-400 border-indigo-950";
+                    const cardClass = isDrawn
+                      ? "border-emerald-500/55 bg-emerald-950/20 shadow-[0_0_15px_rgba(16,185,129,0.18)] ring-1 ring-emerald-500/30 relative"
+                      : `${fallbackColor} relative`;
                     return (
                       <div 
                         key={idx} 
                         onClick={() => handleQuickBaseSelect(forecastItem.code)}
-                        className={`p-3.5 rounded-2xl border flex flex-col justify-between transition-all hover:scale-[1.02] cursor-pointer ${fallbackColor}`}
+                        className={`p-3.5 rounded-2xl border flex flex-col justify-between transition-all hover:scale-[1.02] cursor-pointer ${cardClass}`}
                         title="Click para cargar este animalito como base en la calculadora"
                       >
+                        {isDrawn && (
+                          <div className="absolute top-2.5 right-2.5 flex items-center gap-1 z-10">
+                            <span className="text-[8.5px] font-black font-sans tracking-wide bg-emerald-500 text-white px-2 py-0.5 rounded-full uppercase leading-none shadow-md animate-pulse">
+                              ★ ACERTADO
+                            </span>
+                          </div>
+                        )}
                         <div className="space-y-1.5">
                           <span className={`text-[8px] font-black font-mono px-1.5 py-0.5 rounded border block w-max uppercase ${fallbackBadge}`}>
                             {forecastItem.type}
@@ -8616,11 +8862,16 @@ export default function App() {
                         return sorted.map((item, idx) => {
                           const maxFreq = sorted[0]?.count || 1;
                           const pct = Math.max(15, (item.count / maxFreq) * 100);
+                          const isDrawn = Object.values(draws).includes(item.code);
                           return (
                             <div 
                               key={item.code}
                               onClick={() => handleQuickBaseSelect(item.code)}
-                              className="relative flex flex-col justify-between bg-[#0b0d15] hover:bg-emerald-950/15 border border-emerald-950/40 p-3 rounded-xl cursor-pointer transition-all hover:scale-[1.01]"
+                              className={`relative flex flex-col justify-between p-3 rounded-xl cursor-pointer transition-all hover:scale-[1.01] ${
+                                isDrawn 
+                                  ? "bg-emerald-950/25 border-emerald-500/45 shadow-[0_0_8px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/20" 
+                                  : "bg-[#0b0d15] hover:bg-emerald-950/15 border border-emerald-950/40"
+                              }`}
                               title="Fijar como base para ver en Trilogías"
                             >
                               <div className="flex items-center justify-between text-xs font-bold leading-none select-none z-10">
@@ -8628,7 +8879,14 @@ export default function App() {
                                   <span className="text-slate-500 text-[9px] font-mono">#{idx+1}</span>
                                   <span className="text-base">{item.emoji}</span>
                                   <span className="font-mono text-emerald-400 font-extrabold text-sm">{item.code}</span>
-                                  <span className="uppercase text-slate-200 text-[11px] font-extrabold">{item.name}</span>
+                                  <span className="uppercase text-slate-200 text-[11px] font-extrabold flex items-center gap-1.5">
+                                    {item.name}
+                                    {isDrawn && (
+                                      <span className="text-[7.5px] font-black font-sans tracking-wide bg-emerald-500 text-white px-1.5 py-0.2 rounded-full uppercase scale-90 leading-none">
+                                        ✓ OK
+                                      </span>
+                                    )}
+                                  </span>
                                 </div>
                                 <div className="text-right flex flex-col font-mono text-[9.5px] font-black leading-none shrink-0 text-slate-300">
                                   <span className="text-emerald-400 font-extrabold text-xs">{item.count} hits</span>
@@ -9011,6 +9269,152 @@ export default function App() {
               </div>
             </div>
 
+            {/* 📊 SECCIÓN DE ESTADÍSTICAS GLOBALES DE REPETICIÓN EN TRILOGÍAS CLAVE */}
+            {(() => {
+              const keys = ["03", "06", "32"];
+              const allTrilogyListsAcrossKeys: Array<string[]> = [];
+              keys.forEach(keyAnimal => {
+                const combos = TRILOGIAS_PERSONALIZADAS[keyAnimal === "0" || keyAnimal === "00" ? keyAnimal : parseInt(keyAnimal, 10).toString()] || [];
+                const stdTrilogyList = getStandardTrilogy(keyAnimal);
+                allTrilogyListsAcrossKeys.push(stdTrilogyList);
+                combos.forEach(c => allTrilogyListsAcrossKeys.push(c));
+              });
+
+              const globalFrequencyMap: Record<string, number> = {};
+              allTrilogyListsAcrossKeys.forEach(list => {
+                const uniqueInList = Array.from(new Set(list));
+                uniqueInList.forEach(code => {
+                  globalFrequencyMap[code] = (globalFrequencyMap[code] || 0) + 1;
+                });
+              });
+
+              const totalTrilogies = allTrilogyListsAcrossKeys.length;
+              if (totalTrilogies === 0) return null;
+
+              const globalStatsList = Object.entries(globalFrequencyMap)
+                .map(([code, count]) => {
+                  const percentage = Math.round((count / totalTrilogies) * 100);
+                  return { code, count, percentage };
+                })
+                .filter(item => item.count > 1) // Only show repeated animals!
+                .sort((a, b) => b.count - a.count || parseInt(a.code, 10) - parseInt(b.code, 10));
+
+              return (
+                <div className={`p-5 rounded-2xl border flex flex-col gap-3 select-none animate-fadeIn ${
+                  darkMode 
+                    ? "bg-slate-900/60 border-slate-800 shadow-xl" 
+                    : "bg-amber-50/30 border-amber-200/60 shadow-md"
+                }`}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                      <h4 className={`text-xs md:text-sm font-black uppercase tracking-wider ${
+                        darkMode ? "text-indigo-300" : "text-amber-850"
+                      }`}>
+                        📊 ANÁLISIS DE REPETICIÓN MULTI-TRILOGÍA (% ESTADÍSTICO)
+                      </h4>
+                    </div>
+                    <span className={`text-[9px] font-mono font-extrabold px-2 py-0.5 rounded-full uppercase tracking-widest ${
+                      darkMode ? "bg-slate-950 text-indigo-400 border border-slate-850" : "bg-amber-100 text-amber-800 border border-amber-200"
+                    }`}>
+                      {globalStatsList.length} Animales Repetidos
+                    </span>
+                  </div>
+                  
+                  <p className="text-[10.5px] text-slate-400 dark:text-slate-400 leading-relaxed max-w-4xl">
+                    Los animales a continuación <strong>aparecen en múltiples combinaciones a la vez</strong> de las trilogías clave (03, 06, 32). Esto representa una coincidencia matemática muy fuerte para hoy:
+                  </p>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 mt-1">
+                    {globalStatsList.map(({ code, count, percentage }) => {
+                      const anim = ANIMALITOS[code];
+                      const trafficColor = trafficLightColors[code] || "gray";
+                      const isDrawn = Object.values(draws).includes(code);
+
+                      // Style for the statistical badge
+                      let cardBorderClass = darkMode ? "border-slate-850 bg-slate-950/40" : "border-slate-200 bg-white shadow-sm";
+                      let badgeClass = darkMode ? "bg-slate-900 text-slate-400" : "bg-slate-100 text-slate-600";
+                      if (trafficColor === "green") {
+                        cardBorderClass = "border-emerald-500/30 bg-emerald-950/20 shadow-[0_0_8px_rgba(16,185,129,0.15)]";
+                        badgeClass = "bg-emerald-500/15 text-emerald-400";
+                      } else if (trafficColor === "yellow") {
+                        cardBorderClass = "border-amber-400/40 bg-amber-950/25 shadow-[0_0_12px_rgba(251,191,36,0.25)] animate-pulse-fast";
+                        badgeClass = "bg-amber-400/15 text-amber-400";
+                      } else if (trafficColor === "red") {
+                        cardBorderClass = "border-rose-500/30 bg-rose-950/20 shadow-[0_0_8px_rgba(244,63,94,0.15)]";
+                        badgeClass = "bg-rose-500/15 text-rose-400";
+                      }
+
+                      return (
+                        <div
+                          key={code}
+                          onClick={() => {
+                            playSound("click");
+                            handleQuickBaseSelect(code);
+                          }}
+                          className={`p-2.5 rounded-xl border flex flex-col justify-between gap-2.5 transition-all cursor-pointer hover:scale-[1.03] duration-200 ${cardBorderClass}`}
+                        >
+                          <div className="flex items-center justify-between gap-1">
+                            <span className={`font-extrabold text-xs sm:text-sm truncate ${darkMode ? "text-white" : "text-slate-900"}`}>
+                              {anim?.emoji} {code}
+                            </span>
+                            <span className={`text-[8.5px] font-black px-1.5 py-0.5 rounded shrink-0 ${badgeClass}`}>
+                              x{count}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center justify-between text-[9px] font-mono font-bold">
+                              <span className="text-slate-500">Presencia</span>
+                              <span className={trafficColor !== "gray" ? "text-amber-400" : "text-slate-400"}>
+                                {percentage}%
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-900 rounded-full h-1 overflow-hidden">
+                              <div 
+                                className={`h-full rounded-full ${
+                                  trafficColor === "green" 
+                                    ? "bg-emerald-400" 
+                                    : trafficColor === "yellow" 
+                                      ? "bg-amber-400" 
+                                      : trafficColor === "red" 
+                                        ? "bg-rose-400" 
+                                        : "bg-indigo-500"
+                                }`}
+                                style={{ width: `${percentage}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Action button inside the statistic to cycle color directly */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCycleTrafficLight(code, e);
+                            }}
+                            className={`w-full text-[8px] font-black font-sans py-1 rounded border transition-all cursor-pointer ${
+                              trafficColor === "green"
+                                ? "bg-emerald-500 text-slate-950 border-emerald-400 font-bold"
+                                : trafficColor === "yellow"
+                                  ? "bg-amber-400 text-slate-950 border-amber-300 font-bold animate-pulse"
+                                  : trafficColor === "red"
+                                    ? "bg-rose-500 text-slate-950 border-rose-400 font-bold"
+                                    : darkMode
+                                      ? "bg-slate-900 text-slate-400 border-slate-800 hover:text-white"
+                                      : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200"
+                            }`}
+                          >
+                            {trafficColor === "gray" ? "⚪ GRIS" : `🚦 ${trafficColor.toUpperCase()}`}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* 📗 CONTENIDO PRINCIPAL: TRILOGÍA COMPLETA AL ESTILO CUADERNO */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               
@@ -9111,7 +9515,7 @@ export default function App() {
                                   } else {
                                     bgBorderClass = darkMode
                                       ? "bg-purple-950/40 border-purple-500/40 shadow-sm text-purple-200"
-                                      : "bg-purple-50/50 border-purple-300 shadow-sm text-purple-955";
+                                      : "bg-purple-50/50 border-purple-300 shadow-sm text-purple-950";
                                     statusBadge = (
                                       <span className="text-[8px] font-black font-sans tracking-wider px-1.5 py-0.5 rounded bg-purple-600 text-white animate-pulse">
                                         ★ COMPLETA
@@ -9121,7 +9525,7 @@ export default function App() {
                                 } else if (isExtremelyClose) {
                                   bgBorderClass = darkMode
                                     ? "bg-blue-950/40 border-blue-500/40 shadow-sm text-blue-200"
-                                    : "bg-blue-50/50 border-blue-300 shadow-sm text-blue-955";
+                                    : "bg-blue-50/50 border-blue-300 shadow-sm text-blue-950";
                                   statusBadge = (
                                     <span className="text-[8px] font-black font-sans tracking-wider px-1.5 py-0.5 rounded bg-blue-500 text-white animate-pulse">
                                       ⚡ FALTA 1
@@ -9141,28 +9545,23 @@ export default function App() {
                                 return (
                                   <div 
                                     key={listIdx}
-                                    className={`p-2.5 rounded-xl border flex flex-col gap-2 transition-all ${bgBorderClass}`}
+                                    className="py-2.5 border-b border-dashed border-slate-100 dark:border-slate-800/40"
                                   >
-                                    <div className={`flex items-center justify-between border-b border-dashed pb-1.5 ${
-                                      darkMode ? "border-slate-800" : "border-slate-200/60"
-                                    }`}>
-                                      <div className="flex items-center gap-1.5">
-                                        <span className={`text-[9px] font-black tracking-wide uppercase ${
-                                          isCanon ? "text-blue-500 dark:text-blue-400" : "text-purple-500 dark:text-purple-400"
-                                        }`}>
-                                          {trilogyTitle}
-                                        </span>
-                                        {statusBadge}
-                                      </div>
-                                      <span className={`text-[8.5px] font-mono font-bold px-1 py-0.2 rounded ${
+                                    <div className="flex items-center justify-between mb-1.5">
+                                      <span className={`text-[9px] font-black tracking-wide uppercase ${
+                                        isCanon ? "text-blue-500 dark:text-blue-400" : "text-purple-500 dark:text-purple-400"
+                                      }`}>
+                                        {trilogyTitle}
+                                      </span>
+                                      <span className={`text-[8.5px] font-mono font-bold px-1.5 py-0.2 rounded ${
                                         darkMode ? "text-slate-400 bg-slate-900" : "text-slate-500 bg-slate-100"
                                       }`}>
                                         {drawnCount}/{totalCount}
                                       </span>
                                     </div>
 
-                                    {/* Mini stickers for each trilogy member */}
-                                    <div className="grid grid-cols-3 gap-2 mt-1">
+                                    {/* Horizontal row of oval buttons */}
+                                    <div className="flex flex-wrap gap-2 mt-1">
                                       {list.map((member) => {
                                         const memberMeta = ANIMALITOS[member];
                                         const isDrawn = Object.values(draws).includes(member);
@@ -9184,53 +9583,87 @@ export default function App() {
                                           }
                                         };
 
+                                        const trafficColor = trafficLightColors[member] || "gray";
+                                        const formattedCode = (member === "0" || member === "00") ? member : member.padStart(2, "0");
+
+                                        // Custom styling resembling Google AI Studio Chat white button (or dark mode alternative)
+                                        let buttonBgClass = "bg-white hover:bg-slate-50 text-slate-800 border-slate-200 shadow-sm";
+                                        let textClass = "text-slate-800 dark:text-slate-200";
+
+                                        if (darkMode) {
+                                          buttonBgClass = "bg-slate-900 hover:bg-slate-850 border-slate-800";
+                                        }
+
+                                        if (trafficColor === "green") {
+                                          buttonBgClass = darkMode 
+                                            ? "bg-emerald-950/35 border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.15)]" 
+                                            : "bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-950 shadow-[0_0_6px_rgba(16,185,129,0.1)]";
+                                          textClass = darkMode ? "text-emerald-300" : "text-emerald-900";
+                                        } else if (trafficColor === "yellow") {
+                                          buttonBgClass = darkMode 
+                                            ? "bg-amber-950/35 border-amber-500/40 shadow-[0_0_12px_rgba(251,191,36,0.2)] animate-pulse-fast" 
+                                            : "bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-950 shadow-[0_0_8px_rgba(251,191,36,0.12)] animate-pulse-fast";
+                                          textClass = darkMode ? "text-amber-300" : "text-amber-900";
+                                        } else if (trafficColor === "red") {
+                                          buttonBgClass = darkMode 
+                                            ? "bg-rose-950/35 border-rose-500/40 shadow-[0_0_8px_rgba(244,63,94,0.15)]" 
+                                            : "bg-rose-50 hover:bg-rose-100 border-rose-300 text-rose-950 shadow-[0_0_6px_rgba(244,63,94,0.1)]";
+                                          textClass = darkMode ? "text-rose-300" : "text-rose-900";
+                                        } else if (isDrawn) {
+                                          buttonBgClass = darkMode
+                                            ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400"
+                                            : "bg-emerald-50/40 border-emerald-200 text-emerald-800";
+                                        }
+
                                         return (
                                           <div 
                                             key={member}
-                                            onClick={() => handleQuickBaseSelect(member)}
-                                            className={`flex flex-col items-center gap-1.5 p-1.5 rounded-lg border transition-all cursor-pointer group ${
-                                              isDrawn
-                                                ? darkMode
-                                                  ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-300"
-                                                  : "bg-emerald-50/30 border-emerald-200 text-emerald-850"
-                                                : darkMode
-                                                  ? "bg-slate-950 border-slate-850 hover:bg-slate-900 text-slate-300 hover:border-slate-700"
-                                                  : "bg-white border-slate-150 hover:bg-[#f8fafc]"
-                                            }`}
-                                            title={`Fijar ${member} como base`}
+                                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all duration-200 select-none ${buttonBgClass}`}
                                           >
-                                            {/* Tiny Animal Sticker */}
-                                            <div className="w-10 h-10">
-                                              <AnimalOfflineSticker 
-                                                code={member} 
-                                                size="sm" 
-                                                isDrawn={isDrawn} 
-                                                isScraped={true} 
-                                                showLabel={false}
-                                                className="w-full h-full"
-                                              />
+                                            {/* 🚦 Small Semáforo Dot */}
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                playSound("click");
+                                                handleCycleTrafficLight(member, e);
+                                              }}
+                                              className={`w-2.5 h-2.5 rounded-full border cursor-pointer hover:scale-125 transition-transform shrink-0 ${
+                                                trafficColor === "green" ? "bg-emerald-500 border-emerald-400 shadow-[0_0_3px_rgba(16,185,129,0.5)]" :
+                                                trafficColor === "yellow" ? "bg-amber-400 border-amber-350 shadow-[0_0_3px_rgba(251,191,36,0.5)] animate-pulse-fast" :
+                                                trafficColor === "red" ? "bg-rose-500 border-rose-400 shadow-[0_0_3px_rgba(244,63,94,0.5)]" :
+                                                "bg-slate-300 dark:bg-slate-700 border-slate-400/40"
+                                              }`}
+                                            />
+
+                                            {/* Info Block (sets base) */}
+                                            <div
+                                              onClick={() => {
+                                                playSound("click");
+                                                handleQuickBaseSelect(member);
+                                              }}
+                                              className="flex items-center gap-1 cursor-pointer hover:opacity-80 active:scale-95 transition-all shrink-0"
+                                              title={`Fijar código ${member} como base`}
+                                            >
+                                              <span className="font-mono text-[11px] font-black text-amber-500 dark:text-[#FFDE4D]">
+                                                {formattedCode}
+                                              </span>
+                                              <span className="text-base leading-none">
+                                                {memberMeta?.emoji || "❓"}
+                                              </span>
                                             </div>
 
-                                            <span className="font-black text-[9px] truncate w-full text-center text-slate-900 dark:text-slate-100">
-                                              {memberMeta ? `${memberMeta.emoji} ${memberMeta.name}` : member}
-                                            </span>
-
-                                            {/* Mini Semáforo button */}
+                                            {/* Status Toggle SALIÓ/FALTA */}
                                             <button
                                               type="button"
                                               onClick={handleToggleDraw}
-                                              className={`w-full text-[8px] font-black font-mono py-0.5 rounded border flex items-center justify-center gap-0.5 cursor-pointer transition-all ${
+                                              className={`px-1.5 py-0.2 rounded-full text-[8px] font-black font-sans cursor-pointer transition-all border ${
                                                 isDrawn
-                                                  ? darkMode
-                                                    ? "text-emerald-400 bg-emerald-950/60 border-emerald-500/40 hover:bg-emerald-950/80 shadow-[0_1px_3px_rgba(16,185,129,0.1)]"
-                                                    : "text-emerald-700 bg-emerald-50 border-emerald-300 hover:bg-emerald-100"
-                                                  : darkMode
-                                                    ? "text-rose-400 bg-rose-955/60 border-rose-500/40 hover:bg-rose-955/80 shadow-[0_1px_3px_rgba(244,63,94,0.1)]"
-                                                    : "text-rose-700 bg-rose-50 border-rose-250 hover:bg-rose-100"
+                                                  ? "text-emerald-700 bg-emerald-100 border-emerald-200 dark:text-emerald-350 dark:bg-emerald-950/60 dark:border-emerald-500/30"
+                                                  : "text-rose-700 bg-rose-100 border-rose-200 dark:text-rose-350 dark:bg-rose-950/60 dark:border-rose-500/30"
                                               }`}
                                             >
-                                              <span className={`w-1 h-1 rounded-full ${isDrawn ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
-                                              <span>{isDrawn ? "SÍ" : "NO"}</span>
+                                              {isDrawn ? "SÍ" : "NO"}
                                             </button>
                                           </div>
                                         );
@@ -9352,7 +9785,7 @@ export default function App() {
                                         ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/20 animate-pulse"
                                         : "text-emerald-700 bg-emerald-100 animate-pulse" 
                                       : darkMode
-                                        ? "text-slate-400 bg-slate-955 border border-slate-800"
+                                        ? "text-slate-400 bg-slate-950 border border-slate-800"
                                         : "text-zinc-650 bg-zinc-100"
                                   }`}>
                                     {hasDrawnToday ? "Salió Hoy" : "Consulta"}
@@ -9410,161 +9843,107 @@ export default function App() {
                                     );
                                   })()}
 
-                                  {allTrilogyLists.map(({ name: trilogyTitle, list, isCanonical }, lineIdx) => {
-                                    const totalCount = list.length;
-                                    const drawnCount = list.filter(member => Object.values(draws).includes(member)).length;
-                                    const isFullyTriggered = drawnCount === totalCount;
-                                    const isExtremelyClose = drawnCount === totalCount - 1 && totalCount > 1;
+                                  {/* 📊 ANÁLISIS DE COINCIDENCIAS Y REPETICIONES (%) */}
+                                  {(() => {
+                                    const frequencyMap: Record<string, number> = {};
+                                    allTrilogyLists.forEach(({ list }) => {
+                                      const uniqueInList = Array.from(new Set(list));
+                                      uniqueInList.forEach(code => {
+                                        frequencyMap[code] = (frequencyMap[code] || 0) + 1;
+                                      });
+                                    });
 
-                                    let bgBorderClass = "";
-                                    let statusBadge = null;
+                                    const totalTrilogies = allTrilogyLists.length;
+                                    if (totalTrilogies === 0) return null;
 
-                                    if (isFullyTriggered) {
-                                      if (isCanonical) {
-                                        bgBorderClass = darkMode 
-                                          ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-300"
-                                          : "bg-emerald-50/20 border-emerald-300 shadow-[0_2px_8px_rgba(16,185,129,0.06)]";
-                                        statusBadge = (
-                                          <span className="text-[8.5px] font-black font-sans tracking-wider px-2 py-0.5 rounded-lg bg-emerald-500 text-white animate-pulse">
-                                            ★ COMPLETA
-                                          </span>
-                                        );
-                                      } else {
-                                        bgBorderClass = darkMode
-                                          ? "bg-purple-950/20 border-purple-500/30 text-purple-300"
-                                          : "bg-purple-50/20 border-purple-300 shadow-[0_2px_8px_rgba(147,51,234,0.06)]";
-                                        statusBadge = (
-                                          <span className="text-[8.5px] font-black font-sans tracking-wider px-2 py-0.5 rounded-lg bg-purple-600 text-white animate-pulse">
-                                            ★ COMPLETA
-                                          </span>
-                                        );
-                                      }
-                                    } else if (isExtremelyClose) {
-                                      bgBorderClass = darkMode
-                                        ? "bg-blue-950/20 border-blue-500/30 text-blue-300"
-                                        : "bg-blue-50/20 border-blue-300 shadow-[0_2px_8px_rgba(59,130,246,0.06)]";
-                                      statusBadge = (
-                                        <span className="text-[8.5px] font-black font-sans tracking-wider px-2 py-0.5 rounded-lg bg-blue-500 text-white animate-pulse">
-                                          ⚡ FALTA 1
-                                        </span>
-                                      );
-                                    } else {
-                                      bgBorderClass = darkMode
-                                        ? "bg-slate-950/30 border-slate-850 text-slate-300 hover:border-slate-850 hover:bg-slate-955 transition-all duration-150"
-                                        : "bg-white border-slate-200 hover:border-slate-300 shadow-sm";
-                                      statusBadge = (
-                                        <span className="text-[8.5px] font-black font-sans tracking-wider px-2 py-0.5 rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                                          ⏳ PENDIENTE
-                                        </span>
-                                      );
-                                    }
+                                    const statsList = Object.entries(frequencyMap)
+                                      .map(([code, count]) => {
+                                        const percentage = Math.round((count / totalTrilogies) * 100);
+                                        return { code, count, percentage };
+                                      })
+                                      .sort((a, b) => b.count - a.count || parseInt(a.code, 10) - parseInt(b.code, 10));
 
                                     return (
-                                      <div 
-                                        key={lineIdx} 
-                                        className={`flex flex-col gap-3 p-4 sm:p-5 rounded-2xl border transition-all select-none duration-300 ${bgBorderClass}`}
-                                      >
-                                        {/* Mini Header block */}
-                                        <div className={`flex items-center justify-between border-b border-dashed pb-2 ${
-                                          darkMode ? "border-slate-800" : "border-slate-200"
-                                        }`}>
-                                          <div className="flex items-center gap-2">
-                                            <span className={`text-[10px] font-black font-sans tracking-wide uppercase ${
-                                              isCanonical ? "text-blue-500 dark:text-blue-400" : "text-purple-500 dark:text-purple-400"
+                                      <div className={`p-4 rounded-2xl border select-none ${
+                                        darkMode ? "bg-slate-950/60 border-slate-850" : "bg-[#f8fafc] border-slate-150"
+                                      }`}>
+                                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className={`text-[11px] font-black uppercase tracking-wider ${
+                                              darkMode ? "text-purple-450" : "text-purple-800"
                                             }`}>
-                                              {trilogyTitle}
+                                              📊 PORCENTAJE DE CONCURRENCIA (REPETIDOS EN TRILOGÍAS)
                                             </span>
-                                            {statusBadge}
+                                            <span className={`text-[8.5px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide ${
+                                              darkMode ? "bg-purple-500/15 text-purple-400" : "bg-purple-100 text-purple-700"
+                                            }`}>
+                                              Estadístico %
+                                            </span>
                                           </div>
-                                          <span className={`text-[10.5px] font-black font-mono px-2 py-0.5 rounded-md ${
-                                            darkMode ? "text-slate-400 bg-slate-900" : "text-slate-500 bg-slate-100"
-                                          }`}>
-                                            ({drawnCount}/{totalCount} ACERTADO)
-                                          </span>
                                         </div>
-
-                                        {/* Connective Grid/Row of Animal Stickers */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-1">
-                                          {list.map((member, mIdx) => {
-                                            const memberMeta = ANIMALITOS[member];
-                                            const isDrawn = Object.values(draws).includes(member);
-                                            const hoursActive = Object.keys(draws).filter(h => draws[h] === member);
-                                            
-                                            const handleToggleDraw = (e: React.MouseEvent) => {
-                                              e.stopPropagation();
-                                              playSound("click");
-                                              if (isDrawn) {
-                                                const hoursToReset = Object.keys(draws).filter(h => draws[h] === member);
-                                                if (hoursToReset.length > 0) {
-                                                  hoursToReset.forEach(h => {
-                                                    handleUpdateManualResult(h, "BORRAR");
-                                                  });
-                                                } else {
-                                                  handleUpdateManualResult(selectedHour, "BORRAR");
-                                                }
-                                              } else {
-                                                handleUpdateManualResult(selectedHour, member);
-                                              }
-                                            };
-
+                                        <p className="text-[10px] text-slate-400 dark:text-slate-400 mb-3 leading-relaxed">
+                                          Los animalitos que se repiten en dos o más trilogías tienen una mayor relevancia estadística y sinergia predictiva para hoy.
+                                        </p>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                                          {statsList.map(({ code, count, percentage }) => {
+                                            const isRepeated = count > 1;
+                                            const anim = ANIMALITOS[code];
+                                            const isDrawn = Object.values(draws).includes(code);
                                             return (
                                               <div 
-                                                key={mIdx}
-                                                onClick={() => handleQuickBaseSelect(member)}
-                                                className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all cursor-pointer group shadow-[0_1px_3px_rgba(0,0,0,0.02)] ${
-                                                  isDrawn
-                                                    ? darkMode
-                                                      ? "bg-emerald-950/40 border-emerald-500/40 hover:bg-emerald-950/60 text-emerald-300"
-                                                      : "bg-emerald-50/40 border-emerald-200/90 hover:bg-emerald-100/50 text-emerald-850"
-                                                    : darkMode
-                                                      ? "bg-slate-950 border-slate-850 hover:bg-slate-900 hover:border-slate-700 text-slate-300"
-                                                      : "bg-white border-slate-150 hover:bg-[#f8fafc] hover:border-slate-300"
+                                                key={code}
+                                                onClick={() => {
+                                                  playSound("click");
+                                                  handleQuickBaseSelect(code);
+                                                }}
+                                                className={`p-2 rounded-xl border flex flex-col justify-between gap-1.5 transition-all cursor-pointer hover:scale-[1.015] ${
+                                                  isRepeated 
+                                                    ? isDrawn
+                                                      ? darkMode
+                                                        ? "bg-emerald-950/35 border-emerald-500/50 shadow-[0_0_8px_rgba(16,185,129,0.15)]"
+                                                        : "bg-emerald-50 border-emerald-300 text-emerald-900 shadow-[0_0_8px_rgba(16,185,129,0.1)]"
+                                                      : darkMode
+                                                        ? "bg-purple-950/20 border-purple-500/40 hover:border-purple-500/60"
+                                                        : "bg-purple-50 border-purple-200 hover:border-purple-300 text-purple-900"
+                                                    : isDrawn
+                                                      ? darkMode
+                                                        ? "bg-slate-900/40 border-slate-800"
+                                                        : "bg-emerald-50/50 border-slate-200 text-emerald-800"
+                                                      : darkMode
+                                                        ? "bg-slate-900/10 border-slate-850 hover:border-slate-800"
+                                                        : "bg-white border-slate-200 hover:bg-slate-100 text-slate-700"
                                                 }`}
-                                                title={`Fijar código ${member} como base de análisis`}
                                               >
-                                                {/* Sticker Image in smaller dimensions */}
-                                                <div className="w-16 h-16 sm:w-20 sm:h-20">
-                                                  <AnimalOfflineSticker 
-                                                    code={member} 
-                                                    size="sm" 
-                                                    isDrawn={isDrawn} 
-                                                    isScraped={true} 
-                                                    showLabel={false}
-                                                    className="w-full h-full"
-                                                  />
-                                                </div>
-
-                                                <div className="text-center flex flex-col gap-1 w-full">
-                                                  <span className="font-extrabold text-xs sm:text-sm font-sans truncate text-slate-900 dark:text-slate-100">
-                                                    {memberMeta ? `${memberMeta.emoji} ${memberMeta.name}` : member}
+                                                <div className="flex items-center justify-between gap-1 min-w-0">
+                                                  <span className={`text-[10px] font-extrabold truncate ${
+                                                    isDrawn 
+                                                      ? darkMode ? "text-emerald-400" : "text-emerald-700" 
+                                                      : darkMode ? "text-slate-200" : "text-slate-850"
+                                                  }`}>
+                                                    {anim?.emoji} {code} - {anim?.name}
                                                   </span>
-
-                                                  {/* Semáforo interactive badge with hours drawing status */}
-                                                  <button
-                                                    type="button"
-                                                    onClick={handleToggleDraw}
-                                                    className={`w-full text-[9px] font-black font-mono tracking-wider py-1 rounded-lg border flex items-center justify-center gap-1 cursor-pointer transition-all ${
-                                                      isDrawn
-                                                        ? darkMode
-                                                          ? "text-emerald-400 bg-emerald-950/60 border-emerald-500/40 hover:bg-emerald-950/80 shadow-[0_1px_3px_rgba(16,185,129,0.1)]"
-                                                          : "text-emerald-700 bg-emerald-50 border-emerald-300 hover:bg-emerald-100 shadow-[0_1px_3px_rgba(16,185,129,0.1)]"
-                                                        : darkMode
-                                                          ? "text-rose-400 bg-rose-955/60 border-rose-500/40 hover:bg-rose-955/80 shadow-[0_1px_3px_rgba(244,63,94,0.1)]"
-                                                          : "text-rose-700 bg-rose-50 border-rose-250 hover:bg-rose-100 shadow-[0_1px_3px_rgba(244,63,94,0.1)]"
-                                                    }`}
-                                                    title={isDrawn ? "Marcar como FALTANTE" : `Marcar como SALIÓ`}
-                                                  >
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${isDrawn ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
-                                                    <span>{isDrawn ? "SALIÓ" : "FALTA"}</span>
-                                                  </button>
-
-                                                  {isDrawn && hoursActive.length > 0 && (
-                                                    <div className={`text-[8.5px] font-extrabold font-mono rounded px-1.5 py-0.5 inline-block mx-auto mt-0.5 ${
-                                                      darkMode ? "text-emerald-400 bg-emerald-950/60" : "text-emerald-800 bg-emerald-50"
+                                                  {isRepeated && (
+                                                    <span className={`text-[8px] font-black px-1.5 py-0.2 rounded shrink-0 ${
+                                                      darkMode ? "text-purple-300 bg-purple-500/25" : "text-purple-700 bg-purple-100"
                                                     }`}>
-                                                      🕒 {hoursActive.map(h => h.replace(":00 ", " ")).join(", ")}
-                                                    </div>
+                                                      x{count} Repite
+                                                    </span>
                                                   )}
+                                                </div>
+                                                <div className="flex items-center justify-between gap-1.5 leading-none">
+                                                  <div className="w-full bg-slate-800/20 rounded-full h-1 overflow-hidden">
+                                                    <div 
+                                                      className={`h-full rounded-full ${isRepeated ? "bg-purple-400" : "bg-slate-400"}`}
+                                                      style={{ width: `${percentage}%` }}
+                                                    />
+                                                  </div>
+                                                  <span className={`text-[10px] font-black font-mono shrink-0 ${
+                                                    isRepeated 
+                                                      ? darkMode ? "text-purple-300" : "text-purple-700" 
+                                                      : darkMode ? "text-slate-400" : "text-slate-500"
+                                                  }`}>
+                                                    {percentage}%
+                                                  </span>
                                                 </div>
                                               </div>
                                             );
@@ -9572,7 +9951,172 @@ export default function App() {
                                         </div>
                                       </div>
                                     );
-                                  })}
+                                  })()}
+
+                                  <div className="flex flex-col gap-3.5 mt-4 divide-y divide-slate-100 dark:divide-slate-800/40">
+                                    {allTrilogyLists.map(({ name: trilogyTitle, list, isCanonical }, lineIdx) => {
+                                      const totalCount = list.length;
+                                      const drawnCount = list.filter(member => Object.values(draws).includes(member)).length;
+                                      const isFullyTriggered = drawnCount === totalCount;
+                                      const isExtremelyClose = drawnCount === totalCount - 1 && totalCount > 1;
+
+                                      return (
+                                        <div 
+                                          key={lineIdx}
+                                          className={`flex flex-col md:flex-row md:items-center gap-3 py-3.5 first:pt-0 ${
+                                            isFullyTriggered 
+                                              ? "bg-emerald-500/5 dark:bg-emerald-500/3 px-3 rounded-2xl border border-dashed border-emerald-500/20" 
+                                              : isExtremelyClose
+                                                ? "bg-blue-500/5 dark:bg-blue-500/3 px-3 rounded-2xl border border-dashed border-blue-500/20"
+                                                : ""
+                                          }`}
+                                        >
+                                          {/* Simple elegant Line Label (replacing the huge football cards headers) */}
+                                          <div className="flex items-center gap-2 shrink-0 md:w-36">
+                                            <span className={`text-[9.5px] font-black tracking-wider uppercase px-2.5 py-1 rounded-full ${
+                                              isCanonical 
+                                                ? "bg-blue-500/10 text-blue-600 dark:bg-blue-950/65 dark:text-blue-300 border border-blue-500/20"
+                                                : "bg-purple-500/10 text-purple-600 dark:bg-purple-950/65 dark:text-purple-300 border border-purple-500/20"
+                                            }`}>
+                                              {isCanonical ? "Canónica" : `Sinergia #${lineIdx}`}
+                                            </span>
+                                            {isFullyTriggered && (
+                                              <span className="text-[8px] font-black font-sans tracking-wide bg-emerald-500 text-white px-1.5 py-0.5 rounded-full uppercase leading-none">
+                                                ★ OK
+                                              </span>
+                                            )}
+                                          </div>
+
+                                          {/* Row/Line of Oval Buttons (One button per animal) */}
+                                          <div className="flex flex-wrap gap-2.5 items-center">
+                                            {list.map((member, mIdx) => {
+                                              const memberMeta = ANIMALITOS[member];
+                                              const isDrawn = Object.values(draws).includes(member);
+                                              const hoursActive = Object.keys(draws).filter(h => draws[h] === member);
+                                              
+                                              const handleToggleDraw = (e: React.MouseEvent) => {
+                                                e.stopPropagation();
+                                                playSound("click");
+                                                if (isDrawn) {
+                                                  const hoursToReset = Object.keys(draws).filter(h => draws[h] === member);
+                                                  if (hoursToReset.length > 0) {
+                                                    hoursToReset.forEach(h => {
+                                                      handleUpdateManualResult(h, "BORRAR");
+                                                    });
+                                                  } else {
+                                                    handleUpdateManualResult(selectedHour, "BORRAR");
+                                                  }
+                                                } else {
+                                                  handleUpdateManualResult(selectedHour, member);
+                                                }
+                                              };
+
+                                              const trafficColor = trafficLightColors[member] || "gray";
+                                              const formattedCode = (member === "0" || member === "00") ? member : member.padStart(2, "0");
+
+                                              // Ultra-clean light/clear backgrounds similar to Google AI Studio's Chat button
+                                              let buttonBgClass = "bg-white hover:bg-slate-50 text-slate-800 border-slate-200 shadow-sm";
+                                              let buttonBorderClass = "border";
+                                              let textClass = "text-slate-800 dark:text-slate-100";
+
+                                              if (darkMode) {
+                                                buttonBgClass = "bg-slate-900/90 hover:bg-slate-800/90 border-slate-800";
+                                              }
+
+                                              // If traffic color assigned, apply high-quality soft semáforo branding to the button
+                                              if (trafficColor === "green") {
+                                                buttonBgClass = darkMode 
+                                                  ? "bg-emerald-950/35 hover:bg-emerald-950/50 border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.15)]" 
+                                                  : "bg-emerald-50/90 hover:bg-emerald-100 border-emerald-300 text-emerald-950 shadow-[0_0_8px_rgba(16,185,129,0.1)]";
+                                                textClass = darkMode ? "text-emerald-300" : "text-emerald-900";
+                                              } else if (trafficColor === "yellow") {
+                                                buttonBgClass = darkMode 
+                                                  ? "bg-amber-950/35 hover:bg-amber-950/50 border-amber-500/40 shadow-[0_0_12px_rgba(251,191,36,0.2)] animate-pulse-fast" 
+                                                  : "bg-amber-50/90 hover:bg-amber-100 border-amber-300 text-amber-950 shadow-[0_0_8px_rgba(251,191,36,0.12)] animate-pulse-fast";
+                                                textClass = darkMode ? "text-amber-300" : "text-amber-900";
+                                              } else if (trafficColor === "red") {
+                                                buttonBgClass = darkMode 
+                                                  ? "bg-rose-950/35 hover:bg-rose-950/50 border-rose-500/40 shadow-[0_0_8px_rgba(244,63,94,0.15)]" 
+                                                  : "bg-rose-50/90 hover:bg-rose-100 border-rose-300 text-rose-950 shadow-[0_0_8px_rgba(244,63,94,0.1)]";
+                                                textClass = darkMode ? "text-rose-300" : "text-rose-900";
+                                              } else if (isDrawn) {
+                                                // Highlighting if the animal was drawn already today
+                                                buttonBgClass = darkMode
+                                                  ? "bg-emerald-950/20 hover:bg-emerald-950/30 border-emerald-500/30"
+                                                  : "bg-emerald-50/40 hover:bg-emerald-50/60 border-emerald-200 text-emerald-950";
+                                                textClass = darkMode ? "text-emerald-400" : "text-emerald-800";
+                                              }
+
+                                              return (
+                                                <div 
+                                                  key={mIdx}
+                                                  className={`inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border transition-all duration-200 select-none ${buttonBgClass} ${buttonBorderClass}`}
+                                                >
+                                                  {/* 🚦 Semáforo Interactive dot */}
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      playSound("click");
+                                                      handleCycleTrafficLight(member, e);
+                                                    }}
+                                                    className={`w-3.5 h-3.5 rounded-full border cursor-pointer hover:scale-125 transition-transform shrink-0 flex items-center justify-center ${
+                                                      trafficColor === "green" ? "bg-emerald-500 border-emerald-400 shadow-[0_0_5px_rgba(16,185,129,0.5)]" :
+                                                      trafficColor === "yellow" ? "bg-amber-400 border-amber-300 shadow-[0_0_5px_rgba(251,191,36,0.5)] animate-pulse-fast" :
+                                                      trafficColor === "red" ? "bg-rose-500 border-rose-400 shadow-[0_0_5px_rgba(244,63,94,0.5)]" :
+                                                      "bg-slate-300 dark:bg-slate-700 border-slate-400/40 dark:border-slate-650"
+                                                    }`}
+                                                    title="Semáforo: Cambiar color de semáforo"
+                                                  />
+
+                                                  {/* Code + Emoji + Name (Centered layout, clicks to select as Base) */}
+                                                  <div
+                                                    onClick={() => {
+                                                      playSound("click");
+                                                      handleQuickBaseSelect(member);
+                                                    }}
+                                                    className="flex items-center gap-1.5 cursor-pointer select-none hover:opacity-80 active:scale-95 transition-all"
+                                                    title={`Fijar código ${member} como base de análisis`}
+                                                  >
+                                                    <span className="font-mono text-xs font-black text-amber-500 dark:text-[#FFDE4D] shrink-0">
+                                                      {formattedCode}
+                                                    </span>
+                                                    <span className="text-lg leading-none filter drop-shadow">
+                                                      {memberMeta?.emoji || "❓"}
+                                                    </span>
+                                                    <span className={`font-sans text-[11px] font-bold truncate max-w-[65px] ${textClass}`}>
+                                                      {memberMeta?.name || member}
+                                                    </span>
+                                                  </div>
+
+                                                  {/* Compact status toggle button (SALIÓ/FALTA) inside the oval button */}
+                                                  <button
+                                                    type="button"
+                                                    onClick={handleToggleDraw}
+                                                    className={`px-2 py-0.5 rounded-full text-[8.5px] font-black tracking-wider font-sans leading-none cursor-pointer transition-all border ${
+                                                      isDrawn
+                                                        ? "text-emerald-700 bg-emerald-100 border-emerald-300 hover:bg-emerald-200 dark:text-emerald-300 dark:bg-emerald-950/60 dark:border-emerald-500/40"
+                                                        : "text-rose-700 bg-rose-100 border-rose-250 hover:bg-rose-200 dark:text-rose-300 dark:bg-rose-950/60 dark:border-rose-500/40"
+                                                    }`}
+                                                    title={isDrawn ? "Marcar como FALTANTE" : "Marcar como SALIÓ"}
+                                                  >
+                                                    {isDrawn ? "SALIÓ" : "FALTA"}
+                                                  </button>
+
+                                                  {/* Clock trigger hours info */}
+                                                  {isDrawn && hoursActive.length > 0 && (
+                                                    <span className="text-[7.5px] font-black font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 px-1.5 py-0.5 rounded-full leading-none shrink-0">
+                                                      {hoursActive.map(h => h.replace(":00 ", " ")).join(",")}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               </div>
                             </motion.div>
@@ -9590,6 +10134,7 @@ export default function App() {
                         onSelectBaseAnimal={handleQuickBaseSelect}
                         darkMode={darkMode}
                         playSound={playSound}
+                        draws={draws}
                       />
                     </div>
                   );
@@ -12190,6 +12735,8 @@ export default function App() {
               loteria={loteria}
               hoursList={hoursList}
               playSound={playSound}
+              trafficLightColors={trafficLightColors}
+              onCycleTrafficLight={handleCycleTrafficLight}
             />
           </motion.div>
         )}
@@ -13071,15 +13618,32 @@ export default function App() {
                               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 {analistaExpertData.top_pronosticos_dia?.map((pr: any, prIdx: number) => {
                                   const metadata = ANIMALITOS[pr.numero] || { emoji: "🐾", name: pr.animal };
+                                  const isDrawn = Object.values(draws).includes(pr.numero);
                                   return (
-                                    <div key={prIdx} className="relative overflow-hidden rounded-xl border border-t-white/10 border-indigo-500/20 bg-gradient-to-b from-[#111928] to-[#0e1321] p-4 flex flex-col gap-2.5 shadow-lg">
+                                    <div 
+                                      key={prIdx} 
+                                      className={`relative overflow-hidden rounded-xl border p-4 flex flex-col gap-2.5 shadow-lg transition-all ${
+                                        isDrawn 
+                                          ? "border-emerald-500/45 bg-gradient-to-b from-[#092215] to-[#0c1912] shadow-[0_4px_20px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/35" 
+                                          : "border-t-white/10 border-indigo-500/20 bg-gradient-to-b from-[#111928] to-[#0e1321]"
+                                      }`}
+                                    >
                                       <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
-                                          <div className="w-9 h-9 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-xl shrink-0">
+                                          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xl shrink-0 ${
+                                            isDrawn ? "bg-emerald-500/20 border border-emerald-500/30 text-emerald-400" : "bg-indigo-500/10 border border-indigo-500/20"
+                                          }`}>
                                             {metadata.emoji}
                                           </div>
                                           <div>
-                                            <div className="text-xs font-black text-white leading-none font-mono">{pr.numero} - {metadata.name}</div>
+                                            <div className="text-xs font-black text-white leading-none font-mono">
+                                              {pr.numero} - {metadata.name}
+                                              {isDrawn && (
+                                                <span className="ml-1.5 text-[8px] font-sans font-black text-emerald-400 bg-emerald-500/15 border border-emerald-500/35 px-1.5 py-0.2 rounded-full uppercase tracking-wider">
+                                                  ✓ ACERTADO
+                                                </span>
+                                              )}
+                                            </div>
                                             <div className="text-[8px] text-slate-400 uppercase tracking-widest mt-0.5">Sugerido: {pr.horario_sugerido}</div>
                                           </div>
                                         </div>
@@ -13110,10 +13674,22 @@ export default function App() {
                                           {animals.map((anName: string, aIdx: number) => {
                                             const foundPair = Object.entries(ANIMALITOS).find(([c, m]) => m.name.toLowerCase() === anName.toLowerCase());
                                             const emoji = foundPair ? foundPair[1].emoji : "🐾";
+                                            const code = foundPair ? foundPair[0] : "";
+                                            const isDrawn = code ? Object.values(draws).includes(code) : false;
+                                            
+                                            let badgeBg = "bg-slate-900/60 border border-slate-800 text-slate-300";
+                                            if (isDrawn) {
+                                              badgeBg = "bg-emerald-500/25 border-emerald-500/60 text-emerald-300 animate-pulse font-bold shadow-[0_0_8px_rgba(16,185,129,0.35)]";
+                                            }
                                             return (
-                                              <div key={aIdx} className="bg-slate-900/60 border border-slate-800 px-1.5 py-0.5 rounded flex items-center gap-0.5" title={anName}>
+                                              <div 
+                                                key={aIdx} 
+                                                className={`px-1.5 py-0.5 rounded flex items-center gap-0.5 border transition-all duration-200 ${badgeBg}`} 
+                                                title={`${anName} ${isDrawn ? '(SALIÓ)' : ''}`}
+                                              >
                                                 <span className="text-xs">{emoji}</span>
-                                                <span className="text-[8px] font-mono text-slate-300 font-bold">{foundPair ? foundPair[0] : ""}</span>
+                                                <span className="text-[8px] font-mono font-bold">{code}</span>
+                                                {isDrawn && <span className="text-[8px] font-sans font-black text-emerald-400">✓</span>}
                                               </div>
                                             );
                                           })}

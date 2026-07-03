@@ -26,6 +26,8 @@ interface OracleTabProps {
   loteria: string;
   hoursList: string[];
   playSound: (soundName: string) => void;
+  trafficLightColors?: Record<string, "gray" | "green" | "yellow" | "red">;
+  onCycleTrafficLight?: (code: string, e?: React.MouseEvent) => void;
 }
 
 export function OracleTab({
@@ -38,7 +40,9 @@ export function OracleTab({
   fecha,
   loteria,
   hoursList,
-  playSound
+  playSound,
+  trafficLightColors,
+  onCycleTrafficLight
 }: OracleTabProps) {
   const [selectedHour, setSelectedHour] = useState<string>("08:00 AM");
   const [showAuditor, setShowAuditor] = useState<boolean>(true);
@@ -184,10 +188,10 @@ export function OracleTab({
             let glowShadow = "";
 
             if (isSelected) {
-              borderTheme = darkMode ? "border-purple-500/60" : "border-purple-400";
-              bgTheme = darkMode ? "bg-gradient-to-br from-purple-950/40 via-purple-900/10 to-slate-950/60" : "bg-gradient-to-br from-purple-50 via-purple-100/30 to-white";
-              leftLineColor = "bg-purple-500";
-              glowShadow = "shadow-[0_0_15px_rgba(168,85,247,0.15)]";
+              borderTheme = "border-amber-400 dark:border-amber-400";
+              bgTheme = "bg-[#FFDE4D] text-slate-950 shadow-lg scale-[1.01]";
+              leftLineColor = "bg-slate-950";
+              glowShadow = "shadow-[0_0_20px_rgba(251,191,36,0.45)]";
             } else if (isHit) {
               borderTheme = darkMode ? "border-emerald-500/40" : "border-emerald-400";
               bgTheme = darkMode ? "bg-gradient-to-br from-emerald-950/30 via-emerald-900/5 to-slate-950/50" : "bg-gradient-to-br from-emerald-50 via-emerald-100/30 to-white";
@@ -219,25 +223,39 @@ export function OracleTab({
 
                 {/* Header: Hour and Status */}
                 <div className="flex justify-between items-center mb-3.5 pl-1.5 z-10">
-                  <span className={`font-mono text-xs font-black ${darkMode ? "text-slate-100" : "text-slate-900"}`}>{hour}</span>
+                  <span className={`font-mono text-xs font-black ${isSelected ? "text-slate-950" : darkMode ? "text-slate-100" : "text-slate-900"}`}>{hour}</span>
                   {isDrawn ? (
                     isHit ? (
-                      <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[8px] font-black font-mono px-2 py-0.5 rounded-lg uppercase tracking-wider">
+                      <span className={`border text-[8px] font-black font-mono px-2 py-0.5 rounded-lg uppercase tracking-wider ${
+                        isSelected 
+                          ? "bg-emerald-900/25 text-emerald-950 border-emerald-900/30" 
+                          : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                      }`}>
                         🎯 Acierto IA
                       </span>
                     ) : isBackupHit ? (
-                      <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[8px] font-black font-mono px-2 py-0.5 rounded-lg uppercase tracking-wider">
+                      <span className={`border text-[8px] font-black font-mono px-2 py-0.5 rounded-lg uppercase tracking-wider ${
+                        isSelected 
+                          ? "bg-blue-900/25 text-blue-950 border-blue-900/30" 
+                          : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                      }`}>
                         🛡️ Respaldo
                       </span>
                     ) : (
                       <span className={`border text-[8px] font-black font-mono px-2 py-0.5 rounded-lg uppercase tracking-wider ${
-                        darkMode ? "bg-slate-850 text-slate-400 border-slate-750" : "bg-slate-100 text-slate-650 border-slate-200"
+                        isSelected 
+                          ? "bg-slate-900/10 text-slate-850 border-slate-900/20" 
+                          : darkMode ? "bg-slate-850 text-slate-400 border-slate-750" : "bg-slate-100 text-slate-650 border-slate-200"
                       }`}>
                         Evaluado
                       </span>
                     )
                   ) : (
-                    <span className="bg-amber-500/20 text-amber-500 border border-amber-500/30 text-[8px] font-black font-mono px-2 py-0.5 rounded-lg uppercase tracking-wider animate-pulse">
+                    <span className={`border text-[8px] font-black font-mono px-2 py-0.5 rounded-lg uppercase tracking-wider animate-pulse ${
+                      isSelected 
+                        ? "bg-amber-950/20 text-amber-950 border-amber-950/30" 
+                        : "bg-amber-500/20 text-amber-500 border border-amber-500/30"
+                    }`}>
                       🔮 Pendiente
                     </span>
                   )}
@@ -247,17 +265,21 @@ export function OracleTab({
                 <div className="pl-1.5 mb-3.5 z-10">
                   {isDrawn ? (
                     <div className={`flex items-center gap-2.5 p-2 rounded-xl border ${
-                      darkMode ? "bg-black/35 border-slate-800/80" : "bg-slate-100/60 border-slate-200/80"
+                      isSelected
+                        ? "bg-white/40 border-amber-500/30 text-slate-950"
+                        : darkMode ? "bg-black/35 border-slate-800/80" : "bg-slate-100/60 border-slate-200/80"
                     }`}>
                       <span className="text-2.5xl filter drop-shadow leading-none shrink-0">{animalMeta?.emoji}</span>
                       <div className="leading-tight truncate">
-                        <span className={`text-[10px] font-mono font-black ${darkMode ? "text-amber-400" : "text-amber-700"}`}>[{drawsCode}]</span>
-                        <span className={`text-[10px] font-black uppercase ml-1 truncate block ${darkMode ? "text-slate-100" : "text-slate-900"}`}>{animalMeta?.name}</span>
+                        <span className={`text-[10px] font-mono font-black ${isSelected ? "text-slate-950" : darkMode ? "text-amber-400" : "text-amber-700"}`}>[{drawsCode}]</span>
+                        <span className={`text-[10px] font-black uppercase ml-1 truncate block ${isSelected ? "text-slate-950" : darkMode ? "text-slate-100" : "text-slate-900"}`}>{animalMeta?.name}</span>
                       </div>
                     </div>
                   ) : (
                     <div className={`h-11 border border-dashed rounded-xl flex items-center justify-center text-[9px] font-mono font-bold uppercase ${
-                      darkMode ? "border-slate-800 bg-black/15 text-slate-500" : "border-slate-300 bg-slate-50/50 text-slate-450"
+                      isSelected
+                        ? "border-amber-650 bg-amber-500/10 text-amber-950"
+                        : darkMode ? "border-slate-800 bg-black/15 text-slate-500" : "border-slate-300 bg-slate-50/50 text-slate-450"
                     }`}>
                       Sin Sorteo Aún
                     </div>
@@ -266,7 +288,7 @@ export function OracleTab({
 
                 {/* Top predictions listing */}
                 <div className="space-y-1.5 pl-1.5 mt-auto z-10">
-                  <span className={`text-[8px] font-black uppercase tracking-widest block font-mono ${darkMode ? "text-slate-500" : "text-slate-400"}`}>
+                  <span className={`text-[8px] font-black uppercase tracking-widest block font-mono ${isSelected ? "text-slate-800" : darkMode ? "text-slate-500" : "text-slate-400"}`}>
                     TOP {animalsCount} ORÁCULO IA:
                   </span>
                   {topN.length === 0 ? (
@@ -280,26 +302,53 @@ export function OracleTab({
                             key={pred.code} 
                             className={`flex items-center justify-between text-[10px] p-1.5 rounded-xl border transition-all ${
                               isThisWinner
-                                ? "bg-emerald-500/20 border-emerald-500/35 text-emerald-400 font-extrabold"
-                                : darkMode
-                                  ? "bg-slate-950/40 border-slate-850 hover:bg-slate-950/60"
-                                  : "bg-white border-slate-200 hover:bg-slate-50"
+                                ? isSelected
+                                  ? "bg-emerald-600/35 border-emerald-600/40 text-emerald-950 font-extrabold"
+                                  : "bg-emerald-500/20 border-emerald-500/35 text-emerald-400 font-extrabold"
+                                : isSelected
+                                  ? "bg-white/45 border-amber-300 hover:bg-white/60 text-slate-950 font-bold"
+                                  : darkMode
+                                    ? "bg-slate-950/40 border-slate-850 hover:bg-slate-950/60 text-slate-300"
+                                    : "bg-white border-slate-200 hover:bg-slate-50 text-slate-700"
                             }`}
                           >
                             <div className="flex items-center gap-1.5 min-w-0">
                               <span className="text-sm shrink-0 leading-none">{pred.emoji}</span>
-                              <span className={`font-mono font-black shrink-0 ${isThisWinner ? "text-emerald-400" : "text-amber-600"}`}>{pred.code}</span>
+                              <span className={`font-mono font-black shrink-0 ${isThisWinner ? (isSelected ? "text-emerald-950" : "text-emerald-400") : (isSelected ? "text-slate-950" : "text-amber-600")}`}>{pred.code}</span>
                               <span className={`text-[8.5px] font-extrabold uppercase truncate ml-0.5 ${
                                 isThisWinner 
-                                  ? "text-emerald-300" 
-                                  : darkMode 
-                                    ? "text-slate-300" 
-                                    : "text-slate-700"
+                                  ? isSelected ? "text-emerald-900" : "text-emerald-300" 
+                                  : isSelected ? "text-slate-800" : darkMode ? "text-slate-300" : "text-slate-700"
                               }`}>{pred.name}</span>
                             </div>
-                            <span className={`font-mono text-[9px] font-black shrink-0 ${isThisWinner ? "text-emerald-400" : "text-amber-500"}`}>
-                              {pred.percentage.toFixed(0)}%
-                            </span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className={`font-mono text-[9px] font-black shrink-0 ${isThisWinner ? (isSelected ? "text-emerald-950" : "text-emerald-400") : (isSelected ? "text-slate-900" : "text-amber-500")}`}>
+                                {pred.percentage.toFixed(0)}%
+                              </span>
+                              
+                              {/* 🚦 Semáforo Interactive Dot inside Oracle */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onCycleTrafficLight) onCycleTrafficLight(pred.code, e);
+                                }}
+                                className={`w-3.5 h-3.5 rounded-full border shadow-sm cursor-pointer hover:scale-125 transition-all flex items-center justify-center shrink-0 ${
+                                  trafficLightColors?.[pred.code] === "green"
+                                    ? "bg-emerald-500 border-emerald-400 shadow-[0_0_5px_rgba(16,185,129,0.3)]"
+                                    : trafficLightColors?.[pred.code] === "yellow"
+                                      ? "bg-amber-400 border-amber-300 shadow-[0_0_5px_rgba(251,191,36,0.3)]"
+                                      : trafficLightColors?.[pred.code] === "red"
+                                        ? "bg-rose-500 border-rose-400 shadow-[0_0_5px_rgba(244,63,94,0.3)]"
+                                        : "bg-slate-500/30 border-slate-400/30"
+                                }`}
+                                title="Semáforo: Haz clic para cambiar color"
+                              >
+                                {(!trafficLightColors?.[pred.code] || trafficLightColors?.[pred.code] === "gray") && (
+                                  <span className="w-1 h-1 rounded-full bg-slate-300/60" />
+                                )}
+                              </button>
+                            </div>
                           </div>
                         );
                       })}
@@ -336,6 +385,8 @@ export function OracleTab({
             darkMode={darkMode}
             isFuture={!draws[selectedHour]}
             animalsCount={animalsCount}
+            trafficLightColors={trafficLightColors}
+            onCycleTrafficLight={onCycleTrafficLight}
           />
         </div>
       </div>
