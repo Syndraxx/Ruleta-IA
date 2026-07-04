@@ -430,6 +430,41 @@ export function runMonteCarloOracle(
   };
 }
 
+const oracleCache = new Map<string, ComprehensiveOracleResult>();
+
+/**
+ * Generates a unique cache key based on prediction inputs
+ */
+export function getOracleCacheKey(
+  accumulatedResults: any[],
+  currentDraws: Record<string, string | null>,
+  loteria: string,
+  selectedHour: string,
+  isNextDayFirstHour: boolean,
+  currentDate?: string
+): string {
+  // Filter history to keep key size small, focused on the active loteria
+  const relevantHistory = accumulatedResults
+    .filter((r) => r.loteria === loteria)
+    .map((r) => `${r.fecha}:${Object.entries(r.draws || {}).map(([k, v]) => `${k}=${v}`).join("|")}`)
+    .join(";");
+
+  const drawsSerialized = Object.entries(currentDraws || {})
+    .sort()
+    .map(([k, v]) => `${k}:${v || "null"}`)
+    .join(",");
+
+  return `${loteria}_${selectedHour}_${isNextDayFirstHour}_${currentDate || "no_date"}_[${drawsSerialized}]_[${relevantHistory}]`;
+}
+
+/**
+ * Clears the prediction cache
+ */
+export function clearOracleCache(): void {
+  oracleCache.clear();
+  console.log("🔮 [Oracle Cache] Predicciones limpiadas de memoria.");
+}
+
 /**
  * Single master function that returns all results cleanly
  */
@@ -442,6 +477,22 @@ export function computeComprehensiveOracle(
   isNextDayFirstHour = false,
   currentDate?: string
 ): ComprehensiveOracleResult {
+  const cacheKey = getOracleCacheKey(
+    accumulatedResults,
+    currentDraws,
+    loteria,
+    selectedHour,
+    isNextDayFirstHour,
+    currentDate
+  );
+
+  if (oracleCache.has(cacheKey)) {
+    console.log(`🔮 [Oracle Cache] HIT para ${loteria} - ${selectedHour} (Fecha: ${currentDate || "Hoy"}). Retornando cálculo en caché.`);
+    return oracleCache.get(cacheKey)!;
+  }
+
+  console.log(`🔮 [Oracle Cache] MISS para ${loteria} - ${selectedHour} (Fecha: ${currentDate || "Hoy"}). Ejecutando simulación Monte Carlo (10k) y Red Neuronal...`);
+
   const { sequence, lastCode, prevCode } = getSequenceOfDraws(
     accumulatedResults,
     currentDraws,
@@ -462,10 +513,13 @@ export function computeComprehensiveOracle(
   );
   const monteCarlo = runMonteCarloOracle(markov, bayesian, poisson, 10000);
 
-  return {
+  const result: ComprehensiveOracleResult = {
     markov,
     bayesian,
     poisson,
     monteCarlo,
   };
+
+  oracleCache.set(cacheKey, result);
+  return result;
 }

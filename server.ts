@@ -454,7 +454,7 @@ function parseHtmlLoteriadehoy(html: string): Record<string, string> {
 }
 
 async function fetchWithTimeout(url: string, options: RequestInit & { timeout?: number }) {
-  const { timeout = 2500, ...fetchOptions } = options;
+  const { timeout = 8000, ...fetchOptions } = options;
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
   try {
@@ -519,7 +519,7 @@ async function fetchRealScrapingWithJS(loteria: string, fechaStr: string): Promi
   for (const { url, lbl, needsSlicing } of urlsToTry) {
     try {
       console.log(`[JS Scraper Node] Intentando URL: ${url}`);
-      const res = await fetchWithTimeout(url, { headers, method: "GET", timeout: 2500 });
+      const res = await fetchWithTimeout(url, { headers, method: "GET", timeout: 8000 });
       if (!res.ok) continue;
       let html = await res.text();
       if (!html) continue;
@@ -1415,33 +1415,40 @@ function generateLocalExpertAnalysis(datosBrutos: any[]): any {
   ];
 
   const mockHourAnimals: Record<string, string[]> = {
-    "08:00_AM": ["Carnero", "Toro"],
-    "09:00_AM": ["Ciempiés", "Alacrán"],
-    "10:00_AM": ["León", "Rana"],
-    "11:00_AM": ["Perico", "Ratón"],
-    "12:00_PM": ["Águila", "Tigre"],
-    "01:00_PM": ["Gato", "Caballo"],
-    "02:00_PM": ["Mono", "Paloma"],
-    "03:00_PM": ["Zorro", "Oso"],
-    "04:00_PM": ["Pavo", "Burro"],
-    "05:00_PM": ["Chivo", "Cochino"],
-    "06:00_PM": ["Gallo", "Camello"],
-    "07:00_PM": ["Cebra", "Iguana"]
+    "08:00_AM": ["Carnero", "Toro", "Ballena"],
+    "09:00_AM": ["Ciempiés", "Alacrán", "Delfín"],
+    "10:00_AM": ["León", "Rana", "Oso"],
+    "11:00_AM": ["Perico", "Ratón", "Cebra"],
+    "12:00_PM": ["Águila", "Tigre", "Pescado"],
+    "01:00_PM": ["Gato", "Caballo", "Gallo"],
+    "02:00_PM": ["Mono", "Paloma", "Lapa"],
+    "03:00_PM": ["Zorro", "Oso", "Elefante"],
+    "04:00_PM": ["Pavo", "Burro", "Venado"],
+    "05:00_PM": ["Chivo", "Cochino", "Jirafa"],
+    "06:00_PM": ["Gallo", "Camello", "Caimán"],
+    "07:00_PM": ["Cebra", "Iguana", "Vaca"]
   };
 
   standardHours.forEach(h => {
     const freqObj = hourFreq[h] || {};
     const sorted = Object.entries(freqObj)
       .sort((a, b) => b[1] - a[1])
-      .map(([num]) => ANIMALITOS[num]);
+      .map(([num]) => ANIMALITOS[num])
+      .filter(Boolean);
     
-    if (sorted.length >= 2) {
-      mapa_calor_horarios[h] = sorted.slice(0, 2);
+    if (sorted.length >= 3) {
+      mapa_calor_horarios[h] = sorted.slice(0, 3);
+    } else if (sorted.length === 2) {
+      const fallbackList = mockHourAnimals[h] || ["León", "Gato", "Oso"];
+      const missing = fallbackList.find(x => x !== sorted[0] && x !== sorted[1]) || fallbackList[2];
+      mapa_calor_horarios[h] = [sorted[0], sorted[1], missing];
     } else if (sorted.length === 1) {
-      const fallbackList = mockHourAnimals[h] || ["León", "Gato"];
-      mapa_calor_horarios[h] = [sorted[0], fallbackList[0] === sorted[0] ? fallbackList[1] : fallbackList[0]];
+      const fallbackList = mockHourAnimals[h] || ["León", "Gato", "Oso"];
+      const second = fallbackList.find(x => x !== sorted[0]) || fallbackList[1];
+      const third = fallbackList.find(x => x !== sorted[0] && x !== second) || fallbackList[2];
+      mapa_calor_horarios[h] = [sorted[0], second, third];
     } else {
-      mapa_calor_horarios[h] = mockHourAnimals[h] || ["León", "Gato"];
+      mapa_calor_horarios[h] = mockHourAnimals[h] || ["León", "Gato", "Oso"];
     }
   });
 
@@ -1459,15 +1466,20 @@ function generateLocalExpertAnalysis(datosBrutos: any[]): any {
 
 // 3. Expert statistical analyst endpoint
 app.post("/api/expert-analyst", async (req, res) => {
-  const { datos_brutos, customApiKey } = req.body;
+  const { datos_brutos, fecha_analisis, customApiKey } = req.body;
   
+  // Exclude today's / the analyzed date's results from predictions so they are independent
+  const filtered_datos_brutos = Array.isArray(datos_brutos)
+    ? datos_brutos.filter((item: any) => !fecha_analisis || item.fecha !== fecha_analisis)
+    : [];
+
   const key = (customApiKey && typeof customApiKey === "string" && customApiKey.startsWith("AIza")) 
     ? customApiKey 
     : process.env.GEMINI_API_KEY;
 
   if (!key) {
     console.log("[Analista Experto] Sin API Key, utilizando modelado estadístico local...");
-    const localResult = generateLocalExpertAnalysis(datos_brutos);
+    const localResult = generateLocalExpertAnalysis(filtered_datos_brutos);
     return res.json({
       success: true,
       simulado: true,
@@ -1485,8 +1497,8 @@ app.post("/api/expert-analyst", async (req, res) => {
 Tu objetivo es analizar un conjunto de datos brutos de resultados históricos de sorteos recientes y transformarlo en inteligencia accionable, patrones claros y métricas de probabilidad para el usuario.
 
 [ENTRADA DE DATOS]
-Aquí tienes el histórico de sorteos en formato JSON:
-${JSON.stringify(datos_brutos || [])}
+Aquí tienes el histórico de sorteos en formato JSON (excluyendo la fecha de análisis para garantizar predicciones reales sin sesgo):
+${JSON.stringify(filtered_datos_brutos || [])}
 
 [INSTRUCCIONES DE PROCESAMIENTO]
 Analiza matemáticamente el volumen de datos y calcula las siguientes métricas clave para cada uno de los 36 animales (códigos 00, 0, y 01 al 36):
@@ -1522,20 +1534,22 @@ Devuelve ÚNICAMENTE un objeto JSON válido con la estructura exacta que se desc
     }
   ],
   "mapa_calor_horarios": {
-    "08:00_AM": ["Animal1", "Animal2"],
-    "09:00_AM": ["Animal3", "Animal4"],
-    "10:00_AM": ["Animal5", "Animal6"],
-    "11:00_AM": ["Animal7", "Animal8"],
-    "12:00_PM": ["Animal9", "Animal10"],
-    "01:00_PM": ["Animal11", "Animal12"],
-    "02:00_PM": ["Animal13", "Animal14"],
-    "03:00_PM": ["Animal15", "Animal16"],
-    "04:00_PM": ["Animal17", "Animal18"],
-    "05:00_PM": ["Animal19", "Animal20"],
-    "06:00_PM": ["Animal21", "Animal22"],
-    "07:00_PM": ["Animal23", "Animal24"]
+    "08:00_AM": ["Animal1", "Animal2", "Animal3"],
+    "09:00_AM": ["Animal4", "Animal5", "Animal6"],
+    "10:00_AM": ["Animal7", "Animal8", "Animal9"],
+    "11:00_AM": ["Animal10", "Animal11", "Animal12"],
+    "12:00_PM": ["Animal13", "Animal14", "Animal15"],
+    "01:00_PM": ["Animal16", "Animal17", "Animal18"],
+    "02:00_PM": ["Animal19", "Animal20", "Animal21"],
+    "03:00_PM": ["Animal22", "Animal23", "Animal24"],
+    "04:00_PM": ["Animal25", "Animal26", "Animal27"],
+    "05:00_PM": ["Animal28", "Animal29", "Animal30"],
+    "06:00_PM": ["Animal31", "Animal32", "Animal33"],
+    "07:00_PM": ["Animal34", "Animal35", "Animal36"]
   }
-}`;
+}
+
+IMPORTANTE: En "mapa_calor_horarios", debes especificar EXACTAMENTE 3 nombres de animales para cada franja horaria. No coloques 2 ni 4. Esta consistencia de patrón de 3 es estrictamente obligatoria para la interfaz del usuario.`;
 
     let response;
     let usedModel = "gemini-3.5-flash";
@@ -1562,6 +1576,72 @@ Devuelve ÚNICAMENTE un objeto JSON válido con la estructura exacta que se desc
     }
 
     const parsedJson = JSON.parse(response.text?.trim() || "{}");
+    
+    // Ensure mapa_calor_horarios is initialized
+    if (!parsedJson.mapa_calor_horarios || typeof parsedJson.mapa_calor_horarios !== "object") {
+      parsedJson.mapa_calor_horarios = {};
+    }
+
+    const standardHours = [
+      "08:00_AM", "09:00_AM", "10:00_AM", "11:00_AM", "12:00_PM", 
+      "01:00_PM", "02:00_PM", "03:00_PM", "04:00_PM", "05:00_PM", "06:00_PM", "07:00_PM"
+    ];
+
+    const mockHourAnimals: Record<string, string[]> = {
+      "08:00_AM": ["Carnero", "Toro", "Ballena"],
+      "09:00_AM": ["Ciempiés", "Alacrán", "Delfín"],
+      "10:00_AM": ["León", "Rana", "Oso"],
+      "11:00_AM": ["Perico", "Ratón", "Cebra"],
+      "12:00_PM": ["Águila", "Tigre", "Pescado"],
+      "01:00_PM": ["Gato", "Caballo", "Gallo"],
+      "02:00_PM": ["Mono", "Paloma", "Lapa"],
+      "03:00_PM": ["Zorro", "Oso", "Elefante"],
+      "04:00_PM": ["Pavo", "Burro", "Venado"],
+      "05:00_PM": ["Chivo", "Cochino", "Jirafa"],
+      "06:00_PM": ["Gallo", "Camello", "Caimán"],
+      "07:00_PM": ["Cebra", "Iguana", "Vaca"]
+    };
+
+    standardHours.forEach(h => {
+      let arr = parsedJson.mapa_calor_horarios[h];
+      
+      // Normalize alternative space-separated formats
+      if (!arr) {
+        const altKey = h.replace("_", " ");
+        if (parsedJson.mapa_calor_horarios[altKey]) {
+          arr = parsedJson.mapa_calor_horarios[altKey];
+          delete parsedJson.mapa_calor_horarios[altKey];
+        }
+      }
+
+      if (!Array.isArray(arr)) {
+        arr = [];
+      }
+
+      // Filter non-strings or empty names
+      arr = arr.filter((x: any) => typeof x === "string" && x.trim().length > 0);
+
+      // Enforce exact length of 3
+      if (arr.length > 3) {
+        arr = arr.slice(0, 3);
+      } else {
+        const fallbackList = mockHourAnimals[h] || ["León", "Gato", "Oso"];
+        while (arr.length < 3) {
+          const nextFallback = fallbackList.find((fb: string) => !arr.includes(fb)) || fallbackList[arr.length] || "León";
+          arr.push(nextFallback);
+        }
+      }
+
+      parsedJson.mapa_calor_horarios[h] = arr;
+    });
+
+    // Strip non-standard hours
+    Object.keys(parsedJson.mapa_calor_horarios).forEach(k => {
+      if (!standardHours.includes(k)) {
+        delete parsedJson.mapa_calor_horarios[k];
+      }
+    });
+
     return res.json({
       success: true,
       simulado: false,
@@ -1572,7 +1652,7 @@ Devuelve ÚNICAMENTE un objeto JSON válido con la estructura exacta que se desc
   } catch (error: any) {
     const issueSnippet = cleanErrorMessage(error);
     console.log(`[Analista Experto] Usando análisis estadístico local como respaldo. Info: ${issueSnippet}`);
-    const localResult = generateLocalExpertAnalysis(datos_brutos);
+    const localResult = generateLocalExpertAnalysis(filtered_datos_brutos);
     return res.json({
       success: true,
       simulado: true,

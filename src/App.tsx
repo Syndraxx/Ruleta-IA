@@ -1578,7 +1578,103 @@ export default function App() {
   // ====== ESTADOS DE LA RED NEURONAL AUTO-APRENDIZABLE ======
   const [neuralMode, setNeuralMode] = useState<"visual_network" | "gemini_console" | "hidden_patterns" | "expert_analyst">("visual_network");
   const [analistaExpertData, setAnalistaExpertData] = useState<any>(null);
+  const [pinnedExpertData, setPinnedExpertData] = useState<any>(() => {
+    try {
+      const stored = localStorage.getItem("PINNED_EXPERT_DATA");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [viewPinnedExpert, setViewPinnedExpert] = useState<boolean>(false);
   const [cargandoAnalistaExpert, setCargandoAnalistaExpert] = useState<boolean>(false);
+  const activeExpertData = (viewPinnedExpert && pinnedExpertData) ? pinnedExpertData : analistaExpertData;
+
+  const [persistedHeatmap, setPersistedHeatmap] = useState<Record<string, Record<string, string[]>>>(() => {
+    try {
+      const stored = localStorage.getItem("PERSISTED_HEATMAP_FORECASTS");
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // RESTAURACIÓN AUTOMÁTICA DEL ANALISTA EXPERTO SEGÚN FECHA Y LOTERÍA AL CARGAR O CAMBIAR DE SELECCIÓN
+  useEffect(() => {
+    try {
+      const loteriaClean = loteria.replace(/\s+/g, "_");
+      const key = `LAST_EXPERT_ANALYST_DATA_${fecha}_${loteriaClean}`;
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        setAnalistaExpertData(JSON.parse(stored));
+      } else {
+        setAnalistaExpertData(null);
+      }
+    } catch (e) {
+      console.error("Error loading LAST_EXPERT_ANALYST_DATA:", e);
+      setAnalistaExpertData(null);
+    }
+  }, [fecha, loteria]);
+
+  useEffect(() => {
+    if (!analistaExpertData?.mapa_calor_horarios) return;
+    
+    const loteriaClean = loteria.replace(/\s+/g, "_");
+    const dateKey = `${fecha}_${loteriaClean}`;
+    let stored: Record<string, Record<string, string[]>> = {};
+    try {
+      const s = localStorage.getItem("PERSISTED_HEATMAP_FORECASTS");
+      if (s) stored = JSON.parse(s);
+    } catch (e) {
+      console.error("Error parsing PERSISTED_HEATMAP_FORECASTS:", e);
+    }
+    
+    const currentDaySaved = stored[dateKey] || {};
+    const newHeatmap = analistaExpertData.mapa_calor_horarios;
+    const mergedForDay: Record<string, string[]> = { ...currentDaySaved };
+
+    const standardHours = [
+      "08:00_AM", "09:00_AM", "10:00_AM", "11:00_AM", "12:00_PM", 
+      "01:00_PM", "02:00_PM", "03:00_PM", "04:00_PM", "05:00_PM", "06:00_PM", "07:00_PM"
+    ];
+
+    const nextPendingHour = standardHours.find(h => {
+      const cleanKey = h.replace("_", " ");
+      const val = draws[cleanKey];
+      return val === undefined || val === null || val === "";
+    });
+    
+    Object.entries(newHeatmap).forEach(([hora, animals]) => {
+      if (!Array.isArray(animals)) return;
+      
+      // BLOQUEO ESTRICTO DE INTERFERENCIAS: Una vez generada la predicción para una hora, se queda congelada
+      // e inmutable hasta el final del día sin importar qué resultados reales se vayan ingresando.
+      if (!currentDaySaved[hora] || currentDaySaved[hora].length === 0) {
+        mergedForDay[hora] = animals;
+      } else {
+        mergedForDay[hora] = currentDaySaved[hora];
+      }
+    });
+    
+    stored[dateKey] = mergedForDay;
+    localStorage.setItem("PERSISTED_HEATMAP_FORECASTS", JSON.stringify(stored));
+    setPersistedHeatmap(stored);
+  }, [analistaExpertData, draws, fecha, loteria]);
+
+  const clearTodayPersistedHeatmap = () => {
+    const loteriaClean = loteria.replace(/\s+/g, "_");
+    const dateKey = `${fecha}_${loteriaClean}`;
+    const updated = { ...persistedHeatmap };
+    delete updated[dateKey];
+    localStorage.setItem("PERSISTED_HEATMAP_FORECASTS", JSON.stringify(updated));
+    setPersistedHeatmap(updated);
+    addLog(`🔥 ANALISTA EXPERTO: Se han restablecido las predicciones congeladas de hoy (${fecha} - ${loteria}). Las predicciones se recalcularán libremente.`);
+    playSound("click");
+  };
+
+  const currentDayHeatmap = (viewPinnedExpert && pinnedExpertData?.mapa_calor_horarios) 
+    ? pinnedExpertData.mapa_calor_horarios 
+    : (persistedHeatmap[`${fecha}_${loteria.replace(/\s+/g, "_")}`] || activeExpertData?.mapa_calor_horarios);
   const [learningRate, setLearningRate] = useState<number>(0.05);
   const [epochs, setEpochs] = useState<number>(100);
   const [isTrainingNeural, setIsTrainingNeural] = useState<boolean>(false);
@@ -2019,6 +2115,7 @@ export default function App() {
         },
         body: JSON.stringify({
           datos_brutos: activeHistorial.slice(0, 100),
+          fecha_analisis: fecha,
           customApiKey: customKey
         })
       });
@@ -2026,6 +2123,13 @@ export default function App() {
       const data = await response.json();
       if (data.success) {
         setAnalistaExpertData(data);
+        try {
+          const loteriaClean = loteria.replace(/\s+/g, "_");
+          const key = `LAST_EXPERT_ANALYST_DATA_${fecha}_${loteriaClean}`;
+          localStorage.setItem(key, JSON.stringify(data));
+        } catch (e) {
+          console.error("Error saving LAST_EXPERT_ANALYST_DATA:", e);
+        }
         playSound("success");
         addLog(`📊 ANALISTA EXPERTO: ¡Modelado y predicciones probabilísticas calculadas con éxito!`);
       } else {
@@ -2051,13 +2155,48 @@ export default function App() {
           { tipo: "RETRASO MATUTINO", mensaje: "León (05) se encuentra atrasado en la franja horaria de las 08:00 AM." }
         ],
         mapa_calor_horarios: {
-          "08:00_AM": ["León", "Caballo"]
+          "08:00_AM": ["León", "Caballo", "Ballena"],
+          "09:00_AM": ["Ciempiés", "Alacrán", "Delfín"],
+          "10:00_AM": ["León", "Rana", "Oso"],
+          "11:00_AM": ["Perico", "Ratón", "Cebra"],
+          "12:00_PM": ["Águila", "Tigre", "Pescado"],
+          "01:00_PM": ["Gato", "Caballo", "Gallo"],
+          "02:00_PM": ["Mono", "Paloma", "Lapa"],
+          "03:00_PM": ["Zorro", "Oso", "Elefante"],
+          "04:00_PM": ["Pavo", "Burro", "Venado"],
+          "05:00_PM": ["Chivo", "Cochino", "Jirafa"],
+          "06:00_PM": ["Gallo", "Camello", "Caimán"],
+          "07:00_PM": ["Cebra", "Iguana", "Vaca"]
         }
       };
       setAnalistaExpertData(localResult);
+      try {
+        const loteriaClean = loteria.replace(/\s+/g, "_");
+        const key = `LAST_EXPERT_ANALYST_DATA_${fecha}_${loteriaClean}`;
+        localStorage.setItem(key, JSON.stringify(localResult));
+      } catch (e) {
+        console.error("Error saving LAST_EXPERT_ANALYST_DATA:", e);
+      }
     } finally {
       setCargandoAnalistaExpert(false);
     }
+  };
+
+  const pinCurrentPredictions = () => {
+    if (!analistaExpertData) return;
+    localStorage.setItem("PINNED_EXPERT_DATA", JSON.stringify(analistaExpertData));
+    setPinnedExpertData(analistaExpertData);
+    setViewPinnedExpert(true);
+    addLog(`📌 ANALISTA EXPERTO: Se han FIJADO y guardado los pronósticos actuales para consulta offline/estática.`);
+    playSound("success");
+  };
+
+  const clearPinnedPredictions = () => {
+    localStorage.removeItem("PINNED_EXPERT_DATA");
+    setPinnedExpertData(null);
+    setViewPinnedExpert(false);
+    addLog(`📌 ANALISTA EXPERTO: Se han borrado los pronósticos guardados.`);
+    playSound("click");
   };
 
   // ====== ESTADOS PARA EL SISTEMA DE LAS X ======
@@ -5387,9 +5526,9 @@ export default function App() {
         const oracleMatchedItem = (automatedUnifiedForecast || []).find(f => f.code === code);
 
         // 3. Expert analyst hit
-        const expertCodes = (analistaExpertData?.top_pronosticos_dia || []).map((p: any) => p.numero);
+        const expertCodes = (activeExpertData?.top_pronosticos_dia || []).map((p: any) => p.numero);
         const isExpertHit = expertCodes.includes(code);
-        const expertMatchedItem = (analistaExpertData?.top_pronosticos_dia || []).find((p: any) => p.numero === code);
+        const expertMatchedItem = (activeExpertData?.top_pronosticos_dia || []).find((p: any) => p.numero === code);
 
         // 4. Motor predictivo (from recommendations)
         const { recommendations: retroRecs } = getRecommendationsForHour(hour, draws, fecha);
@@ -6337,7 +6476,7 @@ export default function App() {
 
         {/* NAVEGACIÓN EN PÁGINAS Y SECCIONES (Fijada abajo) */}
         <div id="navigation-tabs" className={`fixed bottom-4 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:max-w-4xl z-50 p-2 rounded-2xl grid grid-cols-7 gap-1 sm:gap-1.5 shadow-2xl backdrop-blur-md select-none transition-all duration-150 ring-1 ${
-          darkMode ? "bg-[#0b0f19]/95 border-2 border-slate-700 ring-slate-800 text-white" : "bg-white/95 border-4 border-black comic-shadow"
+          darkMode ? "bg-[#030712]/98 border-2 border-slate-450 ring-slate-950 text-white" : "bg-white/95 border-4 border-black comic-shadow"
         }`}>
           <motion.button
             whileHover={{ scale: 1.03, rotate: -1.2 }}
@@ -6346,7 +6485,7 @@ export default function App() {
             className={`py-2 px-0.5 sm:p-2.5 rounded-xl font-extrabold text-[10px] sm:text-[12px] md:text-[14px] uppercase tracking-wider flex flex-col md:flex-row items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
               activeTab === "panel"
                 ? darkMode
-                  ? "bg-[#172554]/90 text-blue-100 border-2 border-blue-400 shadow-[0_0_6px_rgba(59,130,246,0.5)]"
+                  ? "bg-[#172554]/95 text-blue-50 border-[2.5px] border-blue-400 shadow-sm"
                   : "bg-blue-600 text-white border-2 border-black font-black comic-shadow-small"
                 : darkMode
                   ? "text-slate-400 hover:text-white hover:bg-[#182033]"
@@ -6364,7 +6503,7 @@ export default function App() {
             className={`py-2 px-0.5 sm:p-2.5 rounded-xl font-extrabold text-[10px] sm:text-[12px] md:text-[14px] uppercase tracking-wider flex flex-col md:flex-row items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
               activeTab === "oracle"
                 ? darkMode
-                  ? "bg-[#3b0764]/90 text-purple-100 border-2 border-purple-400 shadow-[0_0_6px_rgba(168,85,247,0.5)]"
+                  ? "bg-[#3b0764]/95 text-purple-50 border-[2.5px] border-purple-400 shadow-sm"
                   : "bg-[#8b5cf6] text-white border-2 border-black font-black comic-shadow-small"
                 : darkMode
                   ? "text-slate-400 hover:text-white hover:bg-[#182033]"
@@ -6382,7 +6521,7 @@ export default function App() {
             className={`py-2 px-0.5 sm:p-2.5 rounded-xl font-extrabold text-[10px] sm:text-[12px] md:text-[14px] uppercase tracking-wider flex flex-col md:flex-row items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
               activeTab === "trilogy"
                 ? darkMode
-                  ? "bg-[#78350f]/90 text-amber-100 border-2 border-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.5)]"
+                  ? "bg-[#78350f]/95 text-amber-50 border-[2.5px] border-amber-400 shadow-sm"
                   : "bg-amber-400 text-black border-2 border-black font-black comic-shadow-small"
                 : darkMode
                   ? "text-slate-400 hover:text-white hover:bg-[#182033]"
@@ -6400,7 +6539,7 @@ export default function App() {
             className={`py-2 px-0.5 sm:p-2.5 rounded-xl font-extrabold text-[10px] sm:text-[12px] md:text-[14px] uppercase tracking-wider flex flex-col md:flex-row items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
               activeTab === "predicciones"
                 ? darkMode
-                  ? "bg-[#1e1b4b]/90 text-indigo-100 border-2 border-indigo-400 shadow-[0_0_6px_rgba(99,102,241,0.5)]"
+                  ? "bg-[#1e1b4b]/95 text-indigo-50 border-[2.5px] border-indigo-400 shadow-sm"
                   : "bg-indigo-600 text-white border-2 border-black font-black comic-shadow-small"
                 : darkMode
                   ? "text-slate-400 hover:text-white hover:bg-[#182033]"
@@ -6418,7 +6557,7 @@ export default function App() {
             className={`py-2 px-0.5 sm:p-2.5 rounded-xl font-extrabold text-[10px] sm:text-[12px] md:text-[14px] uppercase tracking-wider flex flex-col md:flex-row items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
               activeTab === "control"
                 ? darkMode
-                  ? "bg-[#3b0764]/90 text-purple-100 border-2 border-purple-400 shadow-[0_0_6px_rgba(168,85,247,0.5)]"
+                  ? "bg-[#3b0764]/95 text-purple-50 border-[2.5px] border-purple-400 shadow-sm"
                   : "bg-[#8b5cf6] text-white border-2 border-black font-black comic-shadow-small"
                 : darkMode
                   ? "text-slate-400 hover:text-white hover:bg-[#182033]"
@@ -6436,7 +6575,7 @@ export default function App() {
             className={`py-2 px-0.5 sm:p-2.5 rounded-xl font-extrabold text-[10px] sm:text-[12px] md:text-[14px] uppercase tracking-wider flex flex-col md:flex-row items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
               activeTab === "sistemax"
                 ? darkMode
-                  ? "bg-[#022c22]/90 text-emerald-100 border-2 border-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.5)]"
+                  ? "bg-[#022c22]/95 text-emerald-50 border-[2.5px] border-emerald-400 shadow-sm"
                   : "bg-emerald-600 text-white border-2 border-black font-black comic-shadow-small"
                 : darkMode
                   ? "text-slate-400 hover:text-white hover:bg-[#182033]"
@@ -6454,7 +6593,7 @@ export default function App() {
             className={`py-2 px-0.5 sm:p-2.5 rounded-xl font-extrabold text-[10px] sm:text-[12px] md:text-[14px] uppercase tracking-wider flex flex-col md:flex-row items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
               activeTab === "agente_ia"
                 ? darkMode
-                  ? "bg-[#1e1b4b]/90 text-indigo-100 border-2 border-indigo-400 shadow-[0_0_6px_rgba(99,102,241,0.5)]"
+                  ? "bg-[#1e1b4b]/95 text-indigo-50 border-[2.5px] border-indigo-400 shadow-sm"
                   : "bg-indigo-600 text-white border-2 border-black font-black comic-shadow-small"
                 : darkMode
                   ? "text-slate-400 hover:text-white hover:bg-[#182033]"
@@ -6808,9 +6947,9 @@ export default function App() {
                   const oracleMatchedItem = (automatedUnifiedForecast || []).find(f => f.code === currentDrawCode);
 
                   // 3. Check Expert Analyst predictions
-                  const expertCodes = (analistaExpertData?.top_pronosticos_dia || []).map((p: any) => p.numero);
+                  const expertCodes = (activeExpertData?.top_pronosticos_dia || []).map((p: any) => p.numero);
                   const isExpertHit = expertCodes.includes(currentDrawCode);
-                  const expertMatchedItem = (analistaExpertData?.top_pronosticos_dia || []).find((p: any) => p.numero === currentDrawCode);
+                  const expertMatchedItem = (activeExpertData?.top_pronosticos_dia || []).find((p: any) => p.numero === currentDrawCode);
 
                   // Check relationship definitions
                   const isDirectHit = currentDrawCode === suggestedCode;
@@ -10532,9 +10671,9 @@ export default function App() {
                           </span>
                           {slot.recommendations.map(code => {
                             const extraMeta = ANIMALITOS[code];
-                            const isExactHit = slot.hasDrawnAtThisHour === code;
+                            const isExactHit = slot.hasDrawnAtThisHour ? (formatAnimalCode(slot.hasDrawnAtThisHour) === formatAnimalCode(code)) : false;
                             const currentHourIdx = hoursList.indexOf(slot.hourStr);
-                            const isFutureHit = hoursList.slice(currentHourIdx + 1).some(h => draws[h] === code);
+                            const isFutureHit = hoursList.slice(currentHourIdx + 1).some(h => draws[h] ? (formatAnimalCode(draws[h]) === formatAnimalCode(code)) : false);
                             
                             let buttonStyles = "";
                             let trackingIcon = "";
@@ -10655,10 +10794,10 @@ export default function App() {
                         const currentHourIdx = hoursList.indexOf(slot.hourStr);
                         
                         // Exact Hit: Salió en esta hora exacta
-                        const isExactHit = actualDrawnCode && slot.recommendations.includes(actualDrawnCode);
+                        const isExactHit = actualDrawnCode && slot.recommendations.some(code => formatAnimalCode(code) === formatAnimalCode(actualDrawnCode));
                         // Future Hit: Salió más tarde en el día
                         const isFutureHit = !isExactHit && slot.recommendations.some(code => 
-                          hoursList.slice(currentHourIdx + 1).some(h => draws[h] === code)
+                          hoursList.slice(currentHourIdx + 1).some(h => draws[h] ? (formatAnimalCode(draws[h]) === formatAnimalCode(code)) : false)
                         );
                         
                         let statusBadge = null;
@@ -10684,7 +10823,9 @@ export default function App() {
                               ⏱️ Retrasado
                             </span>
                           );
-                          const hittingDrawHour = hoursList.slice(currentHourIdx + 1).find(h => slot.recommendations.includes(draws[h] || ""));
+                          const hittingDrawHour = hoursList.slice(currentHourIdx + 1).find(h => 
+                            slot.recommendations.some(code => draws[h] ? (formatAnimalCode(code) === formatAnimalCode(draws[h])) : false)
+                          );
                           const hittingCode = hittingDrawHour ? draws[hittingDrawHour] : "";
                           const hittingMeta = hittingCode ? ANIMALITOS[hittingCode] : null;
                           notes = `Se sugirió antes. Corrió al horario de las ${hittingDrawHour} resultando en [${hittingCode}] ${hittingMeta?.name}.`;
@@ -13549,6 +13690,76 @@ export default function App() {
                           </motion.button>
                         </div>
 
+                        {/* Control Bar for Live vs Pinned Predictions */}
+                        {(!cargandoAnalistaExpert && (analistaExpertData || pinnedExpertData)) && (
+                          <div className="bg-[#111928] border border-slate-850 p-3.5 rounded-xl flex flex-col sm:flex-row justify-between items-center gap-3">
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-xl">📌</span>
+                              <div>
+                                <h5 className="text-[11px] text-slate-300 font-extrabold uppercase tracking-wider">Modo de Consulta del Analista</h5>
+                                <p className="text-[10px] text-slate-500 mt-0.5">
+                                  {viewPinnedExpert ? "Viendo predicciones fijas de la mañana (estáticas)." : "Viendo predicciones dinámicas recalculadas en vivo."}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                onClick={() => setViewPinnedExpert(false)}
+                                disabled={!analistaExpertData}
+                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                  !viewPinnedExpert
+                                    ? "bg-indigo-600 text-white border border-indigo-500 shadow-md shadow-indigo-600/15"
+                                    : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+                                } ${!analistaExpertData ? "opacity-50 cursor-not-allowed" : ""}`}
+                              >
+                                ⚡ En Vivo
+                              </button>
+                              
+                              {pinnedExpertData ? (
+                                <button
+                                  onClick={() => setViewPinnedExpert(true)}
+                                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                    viewPinnedExpert
+                                      ? "bg-purple-600 text-white border border-purple-500 shadow-md shadow-purple-600/15"
+                                      : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+                                  }`}
+                                >
+                                  📌 Fijado ({pinnedExpertData.modelUsed === "local_statistical_engine" || pinnedExpertData.modelUsed === "local_statistical_engine_fallback" ? "Local" : "IA"})
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={pinCurrentPredictions}
+                                  disabled={!analistaExpertData}
+                                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-850 text-slate-400 hover:text-indigo-400 border border-slate-800 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer"
+                                  title="Fijar y guardar estos pronósticos para consultarlos estáticos más tarde"
+                                >
+                                  💾 Fijar Actual
+                                </button>
+                              )}
+
+                              {pinnedExpertData && (
+                                <button
+                                  onClick={clearPinnedPredictions}
+                                  className="px-2 py-1.5 bg-red-950/40 hover:bg-red-900/40 text-red-400 border border-red-900/30 rounded-lg text-[9px] font-bold transition-all cursor-pointer"
+                                  title="Borrar pronósticos fijados"
+                                >
+                                  🗑️ Borrar
+                                </button>
+                              )}
+
+                              {!viewPinnedExpert && persistedHeatmap[`${fecha}_${loteria.replace(/\s+/g, "_")}`] && (
+                                <button
+                                  onClick={clearTodayPersistedHeatmap}
+                                  className="px-2 py-1.5 bg-indigo-950/40 hover:bg-indigo-900/40 text-indigo-400 border border-indigo-900/30 rounded-lg text-[9px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                                  title="Restablecer y descongelar las predicciones guardadas de hoy"
+                                >
+                                  🔄 Restaurar Bloqueos
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         {cargandoAnalistaExpert ? (
                           <div className="flex-1 flex flex-col items-center justify-center gap-4 py-20 bg-slate-900/10 rounded-2xl border border-slate-850">
                             <div className="w-12 h-12 rounded-full border-4 border-purple-500/20 border-t-purple-500 animate-spin" />
@@ -13557,9 +13768,29 @@ export default function App() {
                               <p className="text-[10px] text-slate-500 font-sans">Analizando demoras, correlaciones secuenciales, distribuciones de Poisson y coeficientes de asimetría...</p>
                             </div>
                           </div>
-                        ) : analistaExpertData ? (
+                        ) : activeExpertData ? (
                           <div className="space-y-5 animate-fadeIn">
                             
+                            {/* Información de Motor y Explicación de Cambios */}
+                            <div className="bg-[#111928] border border-indigo-500/10 p-3 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">🧠</span>
+                                <div>
+                                  <div className="text-[8px] text-slate-400 font-bold uppercase tracking-wider leading-none">Motor de Análisis Activo</div>
+                                  <div className="text-[10px] font-extrabold text-indigo-400 mt-1 flex items-center gap-1.5 leading-none">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                                    {activeExpertData.modelUsed === "local_statistical_engine" || activeExpertData.modelUsed === "local_statistical_engine_fallback"
+                                      ? "💻 MOTOR ESTADÍSTICO LOCAL (Respaldo CPU)"
+                                      : `🤖 RED NEURONAL GEMINI AI (${activeExpertData.modelUsed || "V3.5"})`
+                                    }
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-[9.5px] text-slate-400 leading-normal max-w-sm sm:text-right">
+                                ℹ️ <strong className="text-white">¿Por qué cambian los pronósticos?</strong> Al registrarse o consultarse nuevos sorteos, el volumen histórico se recalcula dinámicamente. Además, el motor IA genera conexiones neuronales adaptativas en cada consulta.
+                              </div>
+                            </div>
+
                             {/* General metrics badge */}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                               <div className="bg-[#111928] border border-slate-850 p-3 rounded-xl flex items-center gap-3">
@@ -13567,7 +13798,7 @@ export default function App() {
                                 <div>
                                   <div className="text-[9px] text-slate-400 font-black uppercase tracking-wider leading-none">Sorteos Analizados</div>
                                   <div className="text-base font-black text-white mt-1 leading-none font-mono">
-                                    {analistaExpertData.metricas_generales?.total_sorteos_analizados || 0}
+                                    {activeExpertData.metricas_generales?.total_sorteos_analizados || 0}
                                   </div>
                                 </div>
                               </div>
@@ -13577,7 +13808,7 @@ export default function App() {
                                 <div>
                                   <div className="text-[9px] text-slate-400 font-black uppercase tracking-wider leading-none">Fecha de Inicio</div>
                                   <div className="text-sm font-black text-white mt-1 leading-none font-mono">
-                                    {analistaExpertData.metricas_generales?.fecha_inicio || "N/D"}
+                                    {activeExpertData.metricas_generales?.fecha_inicio || "N/D"}
                                   </div>
                                 </div>
                               </div>
@@ -13587,18 +13818,18 @@ export default function App() {
                                 <div>
                                   <div className="text-[9px] text-slate-400 font-black uppercase tracking-wider leading-none">Fecha de Término</div>
                                   <div className="text-sm font-black text-white mt-1 leading-none font-mono">
-                                    {analistaExpertData.metricas_generales?.fecha_fin || "N/D"}
+                                    {activeExpertData.metricas_generales?.fecha_fin || "N/D"}
                                   </div>
                                 </div>
                               </div>
                             </div>
 
                             {/* Alertas Críticas de retrasos y tendencias */}
-                            {analistaExpertData.alertas_criticas && analistaExpertData.alertas_criticas.length > 0 && (
+                            {activeExpertData.alertas_criticas && activeExpertData.alertas_criticas.length > 0 && (
                               <div className="space-y-2">
                                 <span className="text-[10px] uppercase font-black text-rose-400 tracking-wider font-sans">⚠️ ALERTAS CRÍTICAS DEL ANALISTA:</span>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                  {analistaExpertData.alertas_criticas.map((alert: any, aIdx: number) => (
+                                  {activeExpertData.alertas_criticas.map((alert: any, aIdx: number) => (
                                     <div key={aIdx} className="bg-gradient-to-r from-red-950/20 to-slate-950/40 border border-red-900/30 p-3 rounded-xl flex gap-3 relative overflow-hidden">
                                       <div className="absolute left-0 top-0 bottom-0 w-[4px] bg-red-600" />
                                       <span className="text-lg shrink-0 mt-0.5">🚨</span>
@@ -13616,22 +13847,24 @@ export default function App() {
                             <div className="space-y-2">
                               <span className="text-[10px] uppercase font-black text-[#FFDE4D] tracking-wider font-sans">🌟 PRONÓSTICOS ESTADÍSTICOS DE ALTO IMPACTO (DÍA ACTUAL):</span>
                               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                {analistaExpertData.top_pronosticos_dia?.map((pr: any, prIdx: number) => {
+                                {activeExpertData.top_pronosticos_dia?.map((pr: any, prIdx: number) => {
                                   const metadata = ANIMALITOS[pr.numero] || { emoji: "🐾", name: pr.animal };
-                                  const isDrawn = Object.values(draws).includes(pr.numero);
+                                  const isDrawn = Object.values(draws).some((drawnCode: any) => 
+                                    drawnCode ? (formatAnimalCode(drawnCode) === formatAnimalCode(pr.numero)) : false
+                                  );
                                   return (
                                     <div 
                                       key={prIdx} 
                                       className={`relative overflow-hidden rounded-xl border p-4 flex flex-col gap-2.5 shadow-lg transition-all ${
                                         isDrawn 
-                                          ? "border-emerald-500/45 bg-gradient-to-b from-[#092215] to-[#0c1912] shadow-[0_4px_20px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/35" 
+                                          ? "border-yellow-400 bg-gradient-to-br from-[#5b21b6] via-[#1a0e35] to-[#78350f] shadow-[0_4px_22px_rgba(234,179,8,0.45)] ring-2 ring-yellow-400/50 scale-[1.02] transform z-10" 
                                           : "border-t-white/10 border-indigo-500/20 bg-gradient-to-b from-[#111928] to-[#0e1321]"
                                       }`}
                                     >
                                       <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                           <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xl shrink-0 ${
-                                            isDrawn ? "bg-emerald-500/20 border border-emerald-500/30 text-emerald-400" : "bg-indigo-500/10 border border-indigo-500/20"
+                                            isDrawn ? "bg-gradient-to-r from-yellow-400 to-amber-500 text-slate-950 border border-yellow-300" : "bg-indigo-500/10 border border-indigo-500/20"
                                           }`}>
                                             {metadata.emoji}
                                           </div>
@@ -13639,8 +13872,8 @@ export default function App() {
                                             <div className="text-xs font-black text-white leading-none font-mono">
                                               {pr.numero} - {metadata.name}
                                               {isDrawn && (
-                                                <span className="ml-1.5 text-[8px] font-sans font-black text-emerald-400 bg-emerald-500/15 border border-emerald-500/35 px-1.5 py-0.2 rounded-full uppercase tracking-wider">
-                                                  ✓ ACERTADO
+                                                <span className="ml-1.5 text-[8px] font-sans font-black text-slate-950 bg-gradient-to-r from-yellow-400 to-amber-400 px-2 py-0.5 rounded-full uppercase tracking-wider animate-bounce inline-block">
+                                                  🏆 ¡GANADO!
                                                 </span>
                                               )}
                                             </div>
@@ -13662,40 +13895,112 @@ export default function App() {
                             </div>
 
                             {/* Horarios Calientes Map */}
-                            {analistaExpertData.mapa_calor_horarios && (
+                            {currentDayHeatmap && (
                               <div className="space-y-2.5">
                                 <span className="text-[10px] uppercase font-black text-indigo-400 tracking-wider font-sans">🔥 DISTRIBUCIÓN DE AFINIDAD HORARIA (MAPA DE CALOR):</span>
                                 <div className="bg-[#111928] border border-slate-850 p-4 rounded-xl">
                                   <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                                    {Object.entries(analistaExpertData.mapa_calor_horarios).map(([hora, animals]: [string, any]) => (
-                                      <div key={hora} className="bg-[#0b0f19] border border-slate-800/80 rounded-lg p-2 flex flex-col items-center justify-center text-center">
-                                        <span className="text-[8px] font-mono font-bold text-slate-400 uppercase tracking-wider">{hora.replace("_", " ")}</span>
-                                        <div className="flex gap-1 mt-1.5">
-                                          {animals.map((anName: string, aIdx: number) => {
-                                            const foundPair = Object.entries(ANIMALITOS).find(([c, m]) => m.name.toLowerCase() === anName.toLowerCase());
-                                            const emoji = foundPair ? foundPair[1].emoji : "🐾";
-                                            const code = foundPair ? foundPair[0] : "";
-                                            const isDrawn = code ? Object.values(draws).includes(code) : false;
+                                    {Object.entries(currentDayHeatmap).map(([hora, animals]: [string, any]) => {
+                                      const cleanHourKey = hora.replace("_", " ");
+                                      
+                                      // Pre-process each animal to determine its metadata and whether it was drawn
+                                      const processedAnimals = animals.map((anName: string) => {
+                                        const foundPair = Object.entries(ANIMALITOS).find(([c, m]) => {
+                                          const norm1 = m.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+                                          const norm2 = anName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+                                          return norm1 === norm2;
+                                        });
+                                        const emoji = foundPair ? foundPair[1].emoji : "🐾";
+                                        const code = foundPair ? foundPair[0] : "";
+                                        
+                                        // Robust matching logic check
+                                        const drawnCode = draws[cleanHourKey];
+                                        const drawnAnimalMeta = drawnCode ? ANIMALITOS[drawnCode] : null;
+                                        const drawnName = drawnAnimalMeta ? drawnAnimalMeta.name : "";
+                                        
+                                        const normDrawn = drawnName ? drawnName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim() : "";
+                                        const normPredicted = anName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+                                        
+                                        const isDrawn = code ? (
+                                          formatAnimalCode(drawnCode) === formatAnimalCode(code) || 
+                                          (normDrawn && normDrawn === normPredicted)
+                                        ) : (
+                                          (normDrawn && normDrawn === normPredicted) || false
+                                        );
+                                        
+                                        return { name: anName, emoji, code, isDrawn };
+                                      });
+                                      
+                                      const hasHit = processedAnimals.some((a: any) => a.isDrawn);
+                                      const actualDrawnCode = draws[cleanHourKey];
+                                      const actualDrawnMeta = actualDrawnCode ? ANIMALITOS[actualDrawnCode] : null;
+                                      
+                                      // Styles for card background (more lively purple/violet, yellow glow if has a hit)
+                                      let cardClass = "bg-gradient-to-br from-[#2e1065] via-[#12072b] to-[#1e1b4b] border border-violet-500/40 rounded-lg p-2.5 flex flex-col items-center justify-between text-center transition-all duration-350 shadow-md hover:border-violet-400 hover:shadow-violet-950/40 min-h-[145px]";
+                                      let hourTextClass = "text-[9px] font-mono font-black text-violet-300 uppercase tracking-widest flex items-center justify-center gap-0.5";
+                                      
+                                      if (hasHit) {
+                                        cardClass = "bg-gradient-to-br from-[#5b21b6] via-[#2e1065] to-[#78350f] border-2 border-yellow-400 rounded-lg p-2.5 flex flex-col items-center justify-between text-center transition-all duration-350 shadow-[0_0_18px_rgba(234,179,8,0.5)] scale-[1.04] transform z-10 animate-pulse-subtle min-h-[145px]";
+                                        hourTextClass = "text-[9px] font-mono font-black text-yellow-300 uppercase tracking-widest flex items-center justify-center gap-0.5";
+                                      }
+                                      
+                                      return (
+                                        <div key={hora} className={cardClass}>
+                                          <div className="w-full flex flex-col items-center">
+                                            <span className={hourTextClass}>
+                                              {cleanHourKey}
+                                              {actualDrawnCode && (
+                                                <span className="text-[10px]" title="Pronóstico congelado para este sorteo realizado">🔒</span>
+                                              )}
+                                            </span>
                                             
-                                            let badgeBg = "bg-slate-900/60 border border-slate-800 text-slate-300";
-                                            if (isDrawn) {
-                                              badgeBg = "bg-emerald-500/25 border-emerald-500/60 text-emerald-300 animate-pulse font-bold shadow-[0_0_8px_rgba(16,185,129,0.35)]";
-                                            }
-                                            return (
-                                              <div 
-                                                key={aIdx} 
-                                                className={`px-1.5 py-0.5 rounded flex items-center gap-0.5 border transition-all duration-200 ${badgeBg}`} 
-                                                title={`${anName} ${isDrawn ? '(SALIÓ)' : ''}`}
-                                              >
-                                                <span className="text-xs">{emoji}</span>
-                                                <span className="text-[8px] font-mono font-bold">{code}</span>
-                                                {isDrawn && <span className="text-[8px] font-sans font-black text-emerald-400">✓</span>}
+                                            {/* Explicar de forma directa si salió el resultado de esta hora o no */}
+                                            {actualDrawnCode ? (
+                                              <div className={`mt-1 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full flex items-center justify-center gap-0.5 ${
+                                                hasHit 
+                                                  ? "bg-yellow-400 text-slate-950 shadow-[0_0_8px_rgba(234,179,8,0.6)] animate-bounce" 
+                                                  : "bg-slate-900 text-slate-400 border border-slate-800"
+                                              }`}>
+                                                {hasHit ? "🏆 GANADO" : "🎯 Salió: "}
+                                                <span className="font-mono">{actualDrawnCode}</span>
+                                                <span>{actualDrawnMeta ? actualDrawnMeta.emoji : ""}</span>
                                               </div>
-                                            );
-                                          })}
+                                            ) : (
+                                              <span className="text-[7.5px] uppercase font-bold text-slate-500 tracking-wider mt-1 block">
+                                                ⏳ Pendiente
+                                              </span>
+                                            )}
+                                          </div>
+                                          
+                                          <div className="flex flex-row justify-between items-center gap-1 mt-2.5 w-full">
+                                            {processedAnimals.map((item: any, aIdx: number) => {
+                                              let badgeBg = "bg-slate-950/40 border-slate-800/60 text-slate-300 hover:bg-slate-900/50";
+                                              if (item.isDrawn) {
+                                                badgeBg = "bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 border-yellow-300 font-black shadow-[0_0_8px_rgba(234,179,8,0.7)] scale-105 z-10";
+                                              }
+                                              return (
+                                                <div 
+                                                  key={aIdx} 
+                                                  className={`relative p-1 rounded-lg flex flex-col items-center justify-center gap-0.5 border text-center transition-all duration-200 select-none ${badgeBg} flex-1 min-w-0`} 
+                                                  title={`${item.name} ${item.isDrawn ? '(SALIÓ Y GANÓ)' : ''}`}
+                                                >
+                                                  {item.isDrawn && (
+                                                    <span className="absolute -top-1.5 -right-1 bg-yellow-400 text-slate-950 text-[7px] w-3 h-3 rounded-full flex items-center justify-center font-black border border-slate-950 shadow-sm animate-bounce">
+                                                      ★
+                                                    </span>
+                                                  )}
+                                                  <span className="text-[13px] leading-none">{item.emoji}</span>
+                                                  <span className="text-[8px] font-mono font-bold leading-none">{formatAnimalCode(item.code) || "N/A"}</span>
+                                                  <span className="text-[7px] font-sans font-black tracking-tight leading-none uppercase truncate w-full mt-0.5">
+                                                    {item.name}
+                                                  </span>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
                                         </div>
-                                      </div>
-                                    ))}
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               </div>
