@@ -42,7 +42,7 @@ export const OracleRegistry: React.FC<OracleRegistryProps> = ({
                 }
             });
 
-            const oracle = computeComprehensiveOracle(historyBefore, currentDraws, loteria, hour, hoursList, false, record.fecha);
+            const oracle = computeComprehensiveOracle(historyBefore, currentDraws, loteria, hour, hoursList, false, record.fecha, 500);
             
             // Check for hits
             const top3 = oracle.monteCarlo.probabilityCloud.slice(0, 3);

@@ -1643,16 +1643,21 @@ export default function App() {
       const val = draws[cleanKey];
       return val === undefined || val === null || val === "";
     });
-    
+
     Object.entries(newHeatmap).forEach(([hora, animals]) => {
       if (!Array.isArray(animals)) return;
       
-      // BLOQUEO ESTRICTO DE INTERFERENCIAS: Una vez generada la predicción para una hora, se queda congelada
-      // e inmutable hasta el final del día sin importar qué resultados reales se vayan ingresando.
-      if (!currentDaySaved[hora] || currentDaySaved[hora].length === 0) {
-        mergedForDay[hora] = animals;
-      } else {
+      const idx = standardHours.indexOf(hora);
+      const nextPendingIdx = nextPendingHour ? standardHours.indexOf(nextPendingHour) : -1;
+      
+      // Si ya pasó esta hora o es la hora activa/pendiente actual, se congela.
+      // Las horas futuras lejanas se calculan dinámicamente según se alimente el modelo.
+      const isPastOrPending = nextPendingIdx === -1 || idx <= nextPendingIdx;
+      
+      if (isPastOrPending && currentDaySaved[hora] && currentDaySaved[hora].length > 0) {
         mergedForDay[hora] = currentDaySaved[hora];
+      } else {
+        mergedForDay[hora] = animals;
       }
     });
     
@@ -5678,84 +5683,93 @@ export default function App() {
     
     let processedCount = 0;
     
-    for (let i = 0; i < daysToScrape.length; i++) {
-      const targetDate = daysToScrape[i];
-      const displayDayNum = i + 1;
+    // Concurrency optimization: Process days in concurrent batches of 4 to maximize throughput and minimize UI blocking
+    const CONCURRENCY_LIMIT = 4;
+    const dayBatches: string[][] = [];
+    for (let i = 0; i < daysToScrape.length; i += CONCURRENCY_LIMIT) {
+      dayBatches.push(daysToScrape.slice(i, i + CONCURRENCY_LIMIT));
+    }
+
+    for (let b = 0; b < dayBatches.length; b++) {
+      const batch = dayBatches[b];
       
-      setMonthlyScrapeLog(prev => [...prev, `☁️ [CONECTANDO] Solicitando resultados de fecha: ${targetDate} para ${loteria}...`]);
-      setMonthlyScrapeProgress(`[${displayDayNum}/${daysToScrape.length}] Extrayendo resultados de fecha: ${targetDate}...`);
-      
-      try {
-        const response = await fetch(`/api/scraping?loteria=${encodeURIComponent(loteria)}&fecha=${encodeURIComponent(targetDate)}`);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      await Promise.all(batch.map(async (targetDate) => {
+        const displayDayNum = ++processedCount;
         
-        const pData = await response.json();
-        const parsedData = pData.data || {};
+        setMonthlyScrapeLog(prev => [...prev, `☁️ [CONECTANDO] Solicitando resultados de fecha: ${targetDate} para ${loteria}...`]);
+        setMonthlyScrapeProgress(`[${processedCount}/${daysToScrape.length}] Extrayendo resultados de fecha: ${targetDate}...`);
         
-        const sourceLabel = pData.source || "Extractor Local";
-        const isRealScrape = (pData.id === "python_scraper" || pData.id === "js_scraper" || pData.id === "js_scraper_fallback") && 
-                             sourceLabel &&
-                             !sourceLabel.includes("Resguardo") && 
-                             !sourceLabel.includes("Algoritmo") &&
-                             !sourceLabel.includes("Cómputo Local") &&
-                             !sourceLabel.includes("Determinístico") &&
-                             !sourceLabel.includes("Determinista");
-        
-        const dayDraws: DrawsRecord = {};
-        const dayScrapedHours: Record<string, boolean> = {};
-        
-        const normalizeAnimalKey = (k: string | null | undefined): string | null => {
-          if (!k) return null;
-          const s = k.trim();
-          if (s === "0" || s === "00") return s;
-          if (s.startsWith("0") && s.length > 1) {
-            return s.substring(1);
-          }
-          return s;
-        };
-        
-        hoursList.forEach(h => {
-          const val = normalizeAnimalKey(parsedData[h]);
-          if (isRealScrape && val && val !== "null" && val !== "") {
-            dayDraws[h] = val;
-            dayScrapedHours[h] = true;
-          } else {
+        try {
+          const response = await fetch(`/api/scraping?loteria=${encodeURIComponent(loteria)}&fecha=${encodeURIComponent(targetDate)}`);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          
+          const pData = await response.json();
+          const parsedData = pData.data || {};
+          
+          const sourceLabel = pData.source || "Extractor Local";
+          const isRealScrape = (pData.id === "python_scraper" || pData.id === "js_scraper" || pData.id === "js_scraper_fallback") && 
+                               sourceLabel &&
+                               !sourceLabel.includes("Resguardo") && 
+                               !sourceLabel.includes("Algoritmo") &&
+                               !sourceLabel.includes("Cómputo Local") &&
+                               !sourceLabel.includes("Determinístico") &&
+                               !sourceLabel.includes("Determinista");
+          
+          const dayDraws: DrawsRecord = {};
+          const dayScrapedHours: Record<string, boolean> = {};
+          
+          const normalizeAnimalKey = (k: string | null | undefined): string | null => {
+            if (!k) return null;
+            const s = k.trim();
+            if (s === "0" || s === "00") return s;
+            if (s.startsWith("0") && s.length > 1) {
+              return s.substring(1);
+            }
+            return s;
+          };
+          
+          hoursList.forEach(h => {
+            const val = normalizeAnimalKey(parsedData[h]);
+            if (isRealScrape && val && val !== "null" && val !== "") {
+              dayDraws[h] = val;
+              dayScrapedHours[h] = true;
+            } else {
+              dayDraws[h] = null;
+              dayScrapedHours[h] = false;
+            }
+          });
+          
+          const realCount = Object.values(dayScrapedHours).filter(Boolean).length;
+          accumulateScrapeResult(loteria, targetDate, dayDraws, sourceLabel, dayScrapedHours);
+          
+          // Formatear sorteos reales obtenidos con códigos de animales y emojis para ver exactamente qué cargó
+          const extSegments: string[] = [];
+          hoursList.forEach(h => {
+            const codeVal = dayDraws[h];
+            if (dayScrapedHours[h] && codeVal && codeVal !== "null" && codeVal !== "") {
+              const meta = ANIMALITOS[codeVal];
+              extSegments.push(`${h.split(" ")[0]} -> ${meta ? `${meta.emoji} [${codeVal}] ${meta.name}` : `${codeVal}`}`);
+            }
+          });
+
+          const successLog = `✅ [EXITO] ${targetDate} | Motor: ${sourceLabel}\n   └─ Sorteos reales obtenidos: ${realCount} unidades\n   └─ Sorteos: ${extSegments.length > 0 ? extSegments.join(" | ") : "Sorteos vacíos o futuros aún"}`;
+          setMonthlyScrapeLog(prev => [...prev, successLog]);
+          
+        } catch (err: any) {
+          const dayDraws: DrawsRecord = {};
+          const dayScrapedHours: Record<string, boolean> = {};
+          hoursList.forEach(h => {
             dayDraws[h] = null;
             dayScrapedHours[h] = false;
-          }
-        });
-        
-        const realCount = Object.values(dayScrapedHours).filter(Boolean).length;
-        accumulateScrapeResult(loteria, targetDate, dayDraws, sourceLabel, dayScrapedHours);
-        
-        // Formatear sorteos reales obtenidos con códigos de animales y emojis para ver exactamente qué cargó
-        const extSegments: string[] = [];
-        hoursList.forEach(h => {
-          const codeVal = dayDraws[h];
-          if (dayScrapedHours[h] && codeVal && codeVal !== "null" && codeVal !== "") {
-            const meta = ANIMALITOS[codeVal];
-            extSegments.push(`${h.split(" ")[0]} -> ${meta ? `${meta.emoji} [${codeVal}] ${meta.name}` : `${codeVal}`}`);
-          }
-        });
+          });
+          
+          accumulateScrapeResult(loteria, targetDate, dayDraws, "Extractor Fallido", dayScrapedHours);
+          
+          const failLog = `❌ Falla en ${targetDate} (${err.message || err})\n   └─ Registrado día como pendiente / sin sorteos reales obtenidos.`;
+          setMonthlyScrapeLog(prev => [...prev, failLog]);
+        }
+      }));
 
-        const successLog = `✅ [EXITO] ${targetDate} | Motor: ${sourceLabel}\n   └─ Sorteos reales obtenidos: ${realCount} unidades\n   └─ Sorteos: ${extSegments.length > 0 ? extSegments.join(" | ") : "Sorteos vacíos o futuros aún"}`;
-        setMonthlyScrapeLog(prev => [...prev, successLog]);
-        
-      } catch (err: any) {
-        const dayDraws: DrawsRecord = {};
-        const dayScrapedHours: Record<string, boolean> = {};
-        hoursList.forEach(h => {
-          dayDraws[h] = null;
-          dayScrapedHours[h] = false;
-        });
-        
-        accumulateScrapeResult(loteria, targetDate, dayDraws, "Extractor Fallido", dayScrapedHours);
-        
-        const failLog = `❌ Falla en ${targetDate} (${err.message || err})\n   └─ Registrado día como pendiente / sin sorteos reales obtenidos.`;
-        setMonthlyScrapeLog(prev => [...prev, failLog]);
-      }
-      
-      processedCount++;
       setMonthlyScrapePercent(Math.round((processedCount / daysToScrape.length) * 100));
     }
     

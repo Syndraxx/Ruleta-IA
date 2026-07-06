@@ -396,15 +396,20 @@ export function runMonteCarloOracle(
     hits[c] = 0;
   });
 
-  // Run 10k simulations
+  // Run simulations using high-performance binary search over cumulative distribution
   for (let s = 0; s < simulationsRun; s++) {
     const r = Math.random();
-    // Binary search or direct search through cumulative distribution
+    let low = 0;
+    let high = cumulativeDistribution.length - 1;
     let selectedCode = ALL_ANIMAL_CODES[0];
-    for (let idx = 0; idx < cumulativeDistribution.length; idx++) {
-      if (r <= cumulativeDistribution[idx].upper) {
-        selectedCode = cumulativeDistribution[idx].code;
-        break;
+
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      if (r <= cumulativeDistribution[mid].upper) {
+        selectedCode = cumulativeDistribution[mid].code;
+        high = mid - 1;
+      } else {
+        low = mid + 1;
       }
     }
     hits[selectedCode]++;
@@ -475,7 +480,8 @@ export function computeComprehensiveOracle(
   selectedHour: string,
   hoursList: string[],
   isNextDayFirstHour = false,
-  currentDate?: string
+  currentDate?: string,
+  simulationsRun?: number
 ): ComprehensiveOracleResult {
   const cacheKey = getOracleCacheKey(
     accumulatedResults,
@@ -491,7 +497,12 @@ export function computeComprehensiveOracle(
     return oracleCache.get(cacheKey)!;
   }
 
-  console.log(`🔮 [Oracle Cache] MISS para ${loteria} - ${selectedHour} (Fecha: ${currentDate || "Hoy"}). Ejecutando simulación Monte Carlo (10k) y Red Neuronal...`);
+  // Determine standard simulations count: server-side uses 10k, browser uses 2k for smoother rendering
+  const activeSims = simulationsRun !== undefined 
+    ? simulationsRun 
+    : (typeof window === "undefined" ? 10000 : 2000);
+
+  console.log(`🔮 [Oracle Cache] MISS para ${loteria} - ${selectedHour} (Fecha: ${currentDate || "Hoy"}). Ejecutando simulación Monte Carlo (${activeSims}) y Red Neuronal...`);
 
   const { sequence, lastCode, prevCode } = getSequenceOfDraws(
     accumulatedResults,
@@ -511,7 +522,7 @@ export function computeComprehensiveOracle(
     isNextDayFirstHour ? hoursList[0] : selectedHour,
     currentDate
   );
-  const monteCarlo = runMonteCarloOracle(markov, bayesian, poisson, 10000);
+  const monteCarlo = runMonteCarloOracle(markov, bayesian, poisson, activeSims);
 
   const result: ComprehensiveOracleResult = {
     markov,

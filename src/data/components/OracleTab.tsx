@@ -48,12 +48,19 @@ export function OracleTab({
   const [showAuditor, setShowAuditor] = useState<boolean>(true);
   const [animalsCount, setAnimalsCount] = useState<number>(2); // Default to 2, exactly as the user wanted
 
-  // Compute Oracle results for ALL hours of the day to show in the master grid
+  // Hybrid Dual-Compute states for professional AI telemetry & offloading
+  const [isServerDeepRun, setIsServerDeepRun] = useState<boolean>(true);
+  const [serverPredictions, setServerPredictions] = useState<Record<string, any>>({});
+  const [isFetchingServer, setIsFetchingServer] = useState<boolean>(false);
+  const [serverLatency, setServerLatency] = useState<string>("");
+  const [engineStatus, setEngineStatus] = useState<"ready" | "fetching" | "error" | "fallback">("ready");
+
+  // Compute Oracle results for ALL hours of the day to show in the master grid (Lighter local runs for ultra-fast instant load)
   const hourlyOracleData = useMemo(() => {
     const results: Record<string, any> = {};
     for (const h of hoursList) {
       try {
-        results[h] = computeComprehensiveOracle(accumulatedResults, draws, loteria, h, hoursList, false, fecha);
+        results[h] = computeComprehensiveOracle(accumulatedResults, draws, loteria, h, hoursList, false, fecha, 2000);
       } catch (e) {
         console.error(`Error computing oracle for ${h}:`, e);
         results[h] = null;
@@ -62,7 +69,75 @@ export function OracleTab({
     return results;
   }, [accumulatedResults, draws, loteria, hoursList, fecha]);
 
-  const selectedOracle = hourlyOracleData[selectedHour] || null;
+  // Asynchronously offload the selected hour's deep analysis (25,000 simulations) to the Server Decoupled AI endpoint
+  React.useEffect(() => {
+    if (!isServerDeepRun) {
+      setEngineStatus("fallback");
+      return;
+    }
+
+    let isMounted = true;
+    const fetchServerPrediction = async () => {
+      setEngineStatus("fetching");
+      setIsFetchingServer(true);
+      const startTime = performance.now();
+
+      try {
+        const response = await fetch("/api/predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            accumulatedResults,
+            currentDraws: draws,
+            loteria,
+            selectedHour,
+            hoursList,
+            isNextDayFirstHour: false,
+            currentDate: fecha,
+            simulationsRun: 25000 // Server Deep Run simulations
+          })
+        });
+
+        if (!response.ok) throw new Error("Fallo de conexión o respuesta errónea del servidor.");
+        const data = await response.json();
+
+        if (isMounted && data.success && data.result) {
+          const endTime = performance.now();
+          const latency = Math.round(endTime - startTime);
+          const cacheKey = `${loteria}_${selectedHour}`;
+          setServerPredictions(prev => ({ ...prev, [cacheKey]: data.result }));
+          setServerLatency(`${latency} ms`);
+          setEngineStatus("ready");
+        } else {
+          throw new Error("Datos devueltos inválidos.");
+        }
+      } catch (err) {
+        console.warn("Fallo de conexión o respuesta errónea del servidor, usando motor local ultra-rápido:", err);
+        if (isMounted) {
+          setEngineStatus("fallback");
+        }
+      } finally {
+        if (isMounted) {
+          setIsFetchingServer(false);
+        }
+      }
+    };
+
+    fetchServerPrediction();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedHour, accumulatedResults, draws, loteria, fecha, hoursList, isServerDeepRun]);
+
+  // Select the highest precision computed result available for detailed analysis
+  const selectedOracle = useMemo(() => {
+    const cacheKey = `${loteria}_${selectedHour}`;
+    if (isServerDeepRun && serverPredictions[cacheKey]) {
+      return serverPredictions[cacheKey];
+    }
+    return hourlyOracleData[selectedHour] || null;
+  }, [loteria, selectedHour, serverPredictions, hourlyOracleData, isServerDeepRun]);
 
   // Custom text colors based on dark mode
   const titleColor = darkMode ? "text-purple-400" : "text-purple-800";
@@ -156,6 +231,95 @@ export function OracleTab({
           />
         </motion.div>
       )}
+
+      {/* CEREBRO PREDICTOR - HYBRID ENGINE CONTROL PANEL HUD */}
+      <div className={`p-4 rounded-2xl border ${
+        darkMode ? "bg-slate-950/80 border-slate-800" : "bg-white border-slate-200"
+      } shadow-md flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 relative overflow-hidden`}>
+        {/* Glow decoration */}
+        <div className="absolute -right-20 -top-20 w-40 h-40 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+        
+        {/* Core telemetry */}
+        <div className="flex items-center gap-3.5 z-10">
+          <div className="relative flex items-center justify-center shrink-0">
+            {/* Pulsing ring */}
+            <span className={`absolute inline-flex h-8 w-8 rounded-full opacity-40 animate-ping ${
+              engineStatus === "fetching" 
+                ? "bg-amber-400" 
+                : engineStatus === "fallback" 
+                  ? "bg-blue-500" 
+                  : "bg-emerald-500"
+            }`} />
+            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shadow ${
+              engineStatus === "fetching" 
+                ? "bg-amber-500 border-amber-400 text-slate-950 animate-pulse" 
+                : engineStatus === "fallback" 
+                  ? "bg-blue-600 border-blue-500 text-white" 
+                  : "bg-emerald-600 border-emerald-500 text-white"
+            }`}>
+              <Brain size={13} className={engineStatus === "fetching" ? "animate-spin" : ""} />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-black uppercase tracking-wider ${darkMode ? "text-slate-200" : "text-slate-800"}`}>
+                Cerebro Predictor: Modo Híbrido Desacoplado
+              </span>
+              <span className={`text-[8.5px] font-black uppercase font-mono px-1.5 py-0.5 rounded-md ${
+                engineStatus === "fetching" 
+                  ? "bg-amber-500/25 text-amber-400 border border-amber-500/35 animate-pulse" 
+                  : engineStatus === "fallback" 
+                    ? "bg-blue-500/20 text-blue-400 border border-blue-500/30" 
+                    : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+              }`}>
+                {engineStatus === "fetching" 
+                  ? "Computando 25k sim..." 
+                  : engineStatus === "fallback" 
+                    ? "Local (2k sim)" 
+                    : "Cloud Activo (25k sim)"}
+              </span>
+            </div>
+            <p className={`text-[10px] font-medium leading-none mt-1 ${textMutedTheme}`}>
+              Ponderando análisis Markoviano, estimaciones Bayesianas y distribución de Poisson sobre {accumulatedResults.length} días de sorteos.
+            </p>
+          </div>
+        </div>
+
+        {/* Action Toggles & Latency stats */}
+        <div className="flex flex-wrap items-center gap-3 z-10 self-end md:self-auto">
+          {/* Performance stats pills */}
+          <div className="flex items-center gap-2">
+            <div className={`px-2.5 py-1 rounded-xl text-[10px] font-bold font-mono border ${
+              darkMode ? "bg-slate-900 border-slate-800 text-slate-400" : "bg-slate-100 border-slate-200 text-slate-600"
+            }`}>
+              ⚡ Latencia: <span className="font-black text-purple-400">{isServerDeepRun ? (serverLatency || "Calculando...") : "Local < 1ms"}</span>
+            </div>
+            <div className={`px-2.5 py-1 rounded-xl text-[10px] font-bold font-mono border ${
+              darkMode ? "bg-slate-900 border-slate-800 text-slate-400" : "bg-slate-100 border-slate-200 text-slate-600"
+            }`}>
+              📊 Muestreo: <span className="font-black text-amber-500">{isServerDeepRun && serverPredictions[selectedHour] ? "25,000 Sim" : "2,000 Sim"}</span>
+            </div>
+          </div>
+
+          {/* Deep Run switch toggle */}
+          <button
+            onClick={() => {
+              playSound("click");
+              setIsServerDeepRun(!isServerDeepRun);
+            }}
+            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 border transition-all ${
+              isServerDeepRun 
+                ? "bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-500/10" 
+                : darkMode 
+                  ? "bg-slate-900 text-slate-400 border-slate-800" 
+                  : "bg-slate-100 text-slate-600 border-slate-350 hover:bg-slate-200"
+            }`}
+            title="Activa el Procesamiento Desacoplado en la Nube con 25,000 simulaciones de Montecarlo"
+          >
+            <span>{isServerDeepRun ? "⚡ Deep Cloud ON" : "💻 Solo Local ON"}</span>
+          </button>
+        </div>
+      </div>
 
       {/* Grid de 12 Horas - Sincronía Temporal de Predicciones */}
       <div className="space-y-4">

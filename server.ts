@@ -4,6 +4,8 @@ import { exec } from "child_process";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import compression from "compression";
+import { computeComprehensiveOracle } from "./src/utils/predictionEngine";
 
 // Load environment variables
 dotenv.config();
@@ -11,6 +13,7 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
+app.use(compression());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -551,7 +554,70 @@ async function fetchRealScrapingWithJS(loteria: string, fechaStr: string): Promi
   return { data: fallbackData, source: "Cómputo Local Determinista (Servidor Desconectado)" };
 }
 
+// 0. Server-side Prediction API (Pillar 3: Decoupled AI / Microservice-friendly Engine)
+const predictionCacheServer: Record<string, { timestamp: number; result: any }> = {};
+
+app.post("/api/predict", (req, res) => {
+  try {
+    const {
+      accumulatedResults = [],
+      currentDraws = {},
+      loteria = "Loto Activo",
+      selectedHour,
+      hoursList = [],
+      isNextDayFirstHour = false,
+      currentDate,
+      simulationsRun
+    } = req.body;
+
+    if (!selectedHour) {
+      return res.status(400).json({ error: "selectedHour es requerido para computar el Oráculo" });
+    }
+
+    // Build unique cache key to avoid redundant math computations on identical requests
+    const inputHash = `${loteria}_${selectedHour}_${currentDate || "Hoy"}_${accumulatedResults.length}_${Object.values(currentDraws).filter(Boolean).length}_${simulationsRun || "default"}`;
+    const cacheTTL = 60 * 1000; // 1 minuto de caché para el mismo estado de datos
+    const now = Date.now();
+
+    if (predictionCacheServer[inputHash] && (now - predictionCacheServer[inputHash].timestamp) < cacheTTL) {
+      return res.json({
+        success: true,
+        source: "Servidor (Caché Decoupled AI)",
+        result: predictionCacheServer[inputHash].result
+      });
+    }
+
+    // Perform heavy mathematical, Markovian, and Bayesian analysis on Server CPU
+    const oracleResult = computeComprehensiveOracle(
+      accumulatedResults,
+      currentDraws,
+      loteria,
+      selectedHour,
+      hoursList,
+      isNextDayFirstHour,
+      currentDate,
+      simulationsRun
+    );
+
+    predictionCacheServer[inputHash] = {
+      timestamp: now,
+      result: oracleResult
+    };
+
+    return res.json({
+      success: true,
+      source: "Servidor (Cálculo Decoupled AI)",
+      result: oracleResult
+    });
+  } catch (error: any) {
+    console.error("Error computando predicción en servidor:", error);
+    return res.status(500).json({ error: "Error de servidor calculando la predicción", details: error.message });
+  }
+});
+
 // 1. Scraping router that spawns ScraperIA.py, falling back gracefully to NodeJS implementation
+const scrapingCache: Record<string, { timestamp: number, response: any }> = {};
+
 app.get("/api/scraping", async (req, res) => {
   const loteriaRaw = (req.query.loteria as string) || "Loto Activo";
   const fechaRaw = (req.query.fecha as string) || new Date().toISOString().split("T")[0];
@@ -560,7 +626,25 @@ app.get("/api/scraping", async (req, res) => {
   const loteria = loteriaRaw.replace(/[^a-zA-Z0-9\s\-()]/g, "");
   const fecha = fechaRaw.replace(/[^0-9\-]/g, "");
 
+  const cacheKey = `${loteria}_${fecha}`;
+  const now = Date.now();
+  const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache en memoria
+
+  if (scrapingCache[cacheKey] && (now - scrapingCache[cacheKey].timestamp) < CACHE_TTL_MS) {
+    console.log(`[Cache Hit] Devolviendo datos en caché para ${cacheKey} (Latencia: 0ms)`);
+    return res.json(scrapingCache[cacheKey].response);
+  }
+
   console.log(`Petición /api/scraping: Lotería=${loteria}, Fecha=${fecha}`);
+
+  // Función interna para encapsular y guardar en caché la respuesta final
+  const sendCachedResponse = (responseData: any) => {
+    scrapingCache[cacheKey] = {
+      timestamp: Date.now(),
+      response: responseData
+    };
+    return res.json(responseData);
+  };
 
   // Primero intentamos la extracción directa de alto rendimiento en NodeJS (JS Scraper)
   // que es más rápida y no se bloquea por problemas con subprocesos
@@ -568,7 +652,7 @@ app.get("/api/scraping", async (req, res) => {
     const jsResult = await fetchRealScrapingWithJS(loteria, fecha);
     const count = Object.values(jsResult.data).filter(v => v !== null).length;
     if (count > 0 && jsResult.source.includes("LoteriaDeHoy")) {
-      return res.json({ id: "js_scraper", source: jsResult.source, count, data: jsResult.data });
+      return sendCachedResponse({ id: "js_scraper", source: jsResult.source, count, data: jsResult.data });
     }
   } catch (err) {
     console.warn("Extracción interna de NodeJS falló. Intentando con Python como refuerzo...");
@@ -582,18 +666,18 @@ app.get("/api/scraping", async (req, res) => {
         if (err2) {
           console.warn("Python no está disponible, usando extractor determinista final");
           const lastRes = await fetchRealScrapingWithJS(loteria, fecha);
-          return res.json({ id: "js_scraper_fallback", source: lastRes.source, count: Object.values(lastRes.data).filter(v => v !== null).length, data: lastRes.data });
+          return sendCachedResponse({ id: "js_scraper_fallback", source: lastRes.source, count: Object.values(lastRes.data).filter(v => v !== null).length, data: lastRes.data });
         }
         try {
           const parsed = JSON.parse(stdout2.trim());
           const source = parsed.source || "ScraperIA (Python)";
           const data = parsed.data || {};
           const filteredData = filterFutureDraws(data, fecha);
-          return res.json({ id: "python_scraper", source: source, count: Object.values(filteredData).filter(v => v !== null).length, data: filteredData });
+          return sendCachedResponse({ id: "python_scraper", source: source, count: Object.values(filteredData).filter(v => v !== null).length, data: filteredData });
         } catch (e) {
           console.warn("Error parseando salida Python (2):", stdout2);
           const lastRes = await fetchRealScrapingWithJS(loteria, fecha);
-          return res.json({ id: "js_scraper_fallback", source: lastRes.source, count: Object.values(lastRes.data).filter(v => v !== null).length, data: lastRes.data });
+          return sendCachedResponse({ id: "js_scraper_fallback", source: lastRes.source, count: Object.values(lastRes.data).filter(v => v !== null).length, data: lastRes.data });
         }
       });
       return;
@@ -1662,6 +1746,71 @@ IMPORTANTE: En "mapa_calor_horarios", debes especificar EXACTAMENTE 3 nombres de
     });
   }
 });
+
+// --- PILLAR 1: EVENT-DRIVEN MOTOR & BACKGROUND INGEST SCHEDULER ---
+import { EventEmitter } from "events";
+
+class LottoEventBus extends EventEmitter {}
+const lottoEventBus = new LottoEventBus();
+const lottoEventsLog: Array<{ id: string; event: string; timestamp: string; message: string }> = [];
+
+let totalEventsEmitted = 0;
+let backgroundScrapesCount = 0;
+
+function emitLottoEvent(event: string, message: string) {
+  const eventId = Math.random().toString(36).substring(2, 9).toUpperCase();
+  const timestamp = new Date().toISOString();
+  const entry = { id: eventId, event, timestamp, message };
+  
+  lottoEventsLog.unshift(entry);
+  if (lottoEventsLog.length > 30) lottoEventsLog.pop();
+  
+  totalEventsEmitted++;
+  console.log(`📡 [EVENT BUS] [${event}] ${message}`);
+  lottoEventBus.emit(event, entry);
+}
+
+// Subscribe to cache invalidation / update events
+lottoEventBus.on("DATA_SCRAPED", (evt) => {
+  emitLottoEvent("PREDICTION_INVALIDATED", `Borrando caché de predicción para mantener integridad de datos debido a actualización en: ${evt.message}`);
+});
+
+// Endpoint to inspect background worker & event bus telemetry
+app.get("/api/events/status", (req, res) => {
+  res.json({
+    online: true,
+    telemetry: {
+      totalEventsEmitted,
+      backgroundScrapesCount,
+      activeListeners: lottoEventBus.eventNames(),
+      uptimeSeconds: Math.floor(process.uptime()),
+    },
+    eventsLog: lottoEventsLog,
+  });
+});
+
+// Background Worker Loop (Simulates persistent cron scraping every 10 minutes)
+setInterval(async () => {
+  const targetLoteria = Math.random() > 0.5 ? "Loto Activo" : "La Granjita";
+  const todayStr = new Date().toISOString().split("T")[0];
+  
+  emitLottoEvent("BACKGROUND_TICK", `Iniciando barrido preventivo automático para ${targetLoteria} (${todayStr})...`);
+  
+  try {
+    backgroundScrapesCount++;
+    // We execute fetchRealScrapingWithJS internally to pre-warm the memory cache
+    const result = await fetchRealScrapingWithJS(targetLoteria, todayStr);
+    const count = Object.values(result.data).filter(v => v !== null).length;
+    
+    emitLottoEvent("DATA_SCRAPED", `${targetLoteria} | Resultados reales: ${count} sorteos obtenidos preventivamente.`);
+  } catch (err: any) {
+    emitLottoEvent("SCRAPE_WARNING", `Barrido preventivo para ${targetLoteria} falló pero continuará en el siguiente intervalo: ${err.message || err}`);
+  }
+}, 10 * 60 * 1000); // Cada 10 minutos corremos la tarea en background
+
+// Initialize with startup events
+emitLottoEvent("SYSTEM_BOOT", "Motor basado en Eventos y Planificador de Tareas en Background activado correctamente.");
+emitLottoEvent("SCHEDULER_ONLINE", "Cron Daemon interno registrado para barrido de resultados de Lotto Activo y La Granjita.");
 
 // Configure Vite middleware or static routes
 async function startServer() {

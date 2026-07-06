@@ -20,7 +20,7 @@ interface VirtualizedHistoryListProps {
   playSound: (soundName: string) => void;
 }
 
-export function VirtualizedHistoryList({
+export const VirtualizedHistoryList = React.memo(function VirtualizedHistoryList({
   items,
   darkMode,
   hoursList,
@@ -147,4 +147,4 @@ export function VirtualizedHistoryList({
       />
     </div>
   );
-}
+});

@@ -24,7 +24,7 @@ interface FrecuenciaChartProps {
   hoursList: string[];
 }
 
-export const FrecuenciaChart: React.FC<FrecuenciaChartProps> = ({
+export const FrecuenciaChart: React.FC<FrecuenciaChartProps> = React.memo(({
   loteria,
   setLoteria,
   fecha,
@@ -540,4 +540,4 @@ export const FrecuenciaChart: React.FC<FrecuenciaChartProps> = ({
 
     </div>
   );
-};
+});

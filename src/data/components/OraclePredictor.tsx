@@ -15,7 +15,7 @@ interface OraclePredictorProps {
   draws?: Record<string, string | null>;
 }
 
-export const OraclePredictor: React.FC<OraclePredictorProps> = ({
+export const OraclePredictor: React.FC<OraclePredictorProps> = React.memo(({
   oracleData,
   selectedHour,
   darkMode,
@@ -200,4 +200,4 @@ export const OraclePredictor: React.FC<OraclePredictorProps> = ({
       </div>
     </div>
   );
-};
+});

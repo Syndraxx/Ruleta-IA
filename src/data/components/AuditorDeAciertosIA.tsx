@@ -11,12 +11,14 @@ interface AuditorDeAciertosIAProps {
   animalsCount?: number;
 }
 
-export const AuditorDeAciertosIA: React.FC<AuditorDeAciertosIAProps> = ({
+export const AuditorDeAciertosIA: React.FC<AuditorDeAciertosIAProps> = React.memo(({
   accumulatedResults,
   loteria,
   darkMode,
   animalsCount = 2,
 }) => {
+  const [auditDepth, setAuditDepth] = React.useState<number>(8); // Límite por defecto de 8 días de auditoría para conservar CPU
+
   const auditResults = useMemo(() => {
     const hits: any[] = [];
     let totalPredictions = 0;
@@ -27,9 +29,15 @@ export const AuditorDeAciertosIA: React.FC<AuditorDeAciertosIAProps> = ({
       .filter((r) => r.loteria === loteria)
       .sort((a, b) => a.fecha.localeCompare(b.fecha));
 
-    // Iterate through records to simulate predictions at each point in time
-    sorted.forEach((record, idx) => {
-      const historyBefore = sorted.slice(0, idx);
+    // Limit the evaluation subset to prevent CPU throttling (Max auditDepth records)
+    const totalRecords = sorted.length;
+    const startIndex = Math.max(0, totalRecords - auditDepth);
+    const evaluationSubset = sorted.slice(startIndex);
+
+    evaluationSubset.forEach((record) => {
+      // Find index in original sorted list to correctly slice historyBefore
+      const idxInOriginal = sorted.findIndex((r) => r.fecha === record.fecha);
+      const historyBefore = idxInOriginal !== -1 ? sorted.slice(0, idxInOriginal) : [];
       
       HOURS_LIST.forEach((hour) => {
         const actualCode = record.draws[hour];
@@ -43,8 +51,8 @@ export const AuditorDeAciertosIA: React.FC<AuditorDeAciertosIAProps> = ({
           }
         });
 
-        // Run Prediction
-        const oracle = computeComprehensiveOracle(historyBefore, currentDraws, loteria, hour, HOURS_LIST, false, record.fecha);
+        // Run Prediction with lightweight simulations count (500) for fast batch processing
+        const oracle = computeComprehensiveOracle(historyBefore, currentDraws, loteria, hour, HOURS_LIST, false, record.fecha, 500);
         
         totalPredictions++;
         
@@ -74,17 +82,49 @@ export const AuditorDeAciertosIA: React.FC<AuditorDeAciertosIAProps> = ({
       hits: hits.reverse(), // Newest first
       percentage: totalPredictions > 0 ? (totalHits / totalPredictions) * 100 : 0,
       totalPredictions,
-      totalHits
+      totalHits,
+      analyzedDays: evaluationSubset.length,
+      totalAvailableDays: totalRecords
     };
-  }, [accumulatedResults, loteria, animalsCount]);
+  }, [accumulatedResults, loteria, animalsCount, auditDepth]);
 
   return (
     <div className={`p-6 rounded-3xl border ${darkMode ? "border-slate-800 bg-slate-900/50" : "border-slate-200 bg-slate-50"}`}>
-        <h2 className={`text-2xl font-black mb-2 ${darkMode ? "text-white" : "text-slate-900"}`}>Auditor de Aciertos IA</h2>
-        <div className={`mb-6 p-4 rounded-xl ${darkMode ? "bg-indigo-950/30" : "bg-indigo-50"}`}>
-            <div className="text-sm font-bold text-indigo-400">Efectividad Acumulada</div>
-            <div className="text-4xl font-black text-indigo-200">{auditResults.percentage.toFixed(2)}%</div>
-            <div className="text-xs text-slate-500">Aciertos: {auditResults.totalHits} / {auditResults.totalPredictions}</div>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+          <h2 className={`text-2xl font-black ${darkMode ? "text-white" : "text-slate-900"}`}>Auditor de Aciertos IA</h2>
+          
+          {/* Depth Controller to balance Performance/Accuracy */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-500">Muestra de Análisis:</span>
+            <select
+              value={auditDepth}
+              onChange={(e) => setAuditDepth(Number(e.target.value))}
+              className={`text-xs font-bold rounded-lg px-2.5 py-1 border outline-none ${
+                darkMode 
+                  ? "bg-slate-800 border-slate-700 text-slate-200" 
+                  : "bg-white border-slate-200 text-slate-700"
+              }`}
+            >
+              <option value={5}>Últimos 5 días (Ultra Rápido)</option>
+              <option value={8}>Últimos 8 días (Recomendado)</option>
+              <option value={15}>Últimos 15 días (Balanceado)</option>
+              <option value={30}>Últimos 30 días (Lento)</option>
+              <option value={100}>Todo el Historial (CPU Intensivo)</option>
+            </select>
+          </div>
+        </div>
+
+        <div className={`mb-6 p-4 rounded-xl flex items-center justify-between ${darkMode ? "bg-indigo-950/30" : "bg-indigo-50"}`}>
+            <div>
+              <div className="text-sm font-bold text-indigo-400">Efectividad Acumulada (Últimos {auditResults.analyzedDays} días)</div>
+              <div className="text-4xl font-black text-indigo-200">{auditResults.percentage.toFixed(2)}%</div>
+              <div className="text-xs text-slate-500">Aciertos: {auditResults.totalHits} / {auditResults.totalPredictions} sorteos analizados</div>
+            </div>
+            <div className="text-right">
+              <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                Modelo Optimizado
+              </span>
+            </div>
         </div>
 
         <div className="space-y-4">
@@ -111,4 +151,4 @@ export const AuditorDeAciertosIA: React.FC<AuditorDeAciertosIAProps> = ({
         </div>
     </div>
   );
-};
+});
