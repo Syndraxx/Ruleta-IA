@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { 
   Clock, 
   Calendar, 
@@ -14114,6 +14115,7 @@ export default function App() {
         )}
 
       </div>
+        <SpeedInsights />
     </div>
   );
 }
