@@ -1,0 +1,21 @@
+{
+  "collections": {
+    "sorteos": {
+      "description": "Historial de sorteos de animalitos de las distintas loterías (Lotto Activo, La Granjita, etc.)",
+      "fields": {
+        "loteria": "string",
+        "fecha": "string",
+        "draws": "map",
+        "updatedAt": "timestamp"
+      }
+    },
+    "usuarios": {
+      "description": "Perfiles de usuarios registrados, preferencias y logs personalizados",
+      "fields": {
+        "email": "string",
+        "createdAt": "timestamp",
+        "settings": "map"
+      }
+    }
+  }
+}

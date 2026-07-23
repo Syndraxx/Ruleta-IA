@@ -23,6 +23,8 @@ interface SistemaXTabProps {
   fecha: string;
   playSound: (soundName: string) => void;
   addLog: (message: string) => void;
+  loteria?: "Loto Activo" | "La Granjita" | "Selva Plus";
+  onChangeLoteria?: (lot: "Loto Activo" | "La Granjita" | "Selva Plus") => void;
 }
 
 export function SistemaXTab({
@@ -34,12 +36,22 @@ export function SistemaXTab({
   accumulatedResults,
   fecha,
   playSound,
-  addLog
+  addLog,
+  loteria = "Loto Activo",
+  onChangeLoteria
 }: SistemaXTabProps) {
   // --- Estados de Control ---
   const [sistemaxHour, setSistemaxHour] = useState<string>("08:00 AM");
   const [sistemaxAuto, setSistemaxAuto] = useState<boolean>(true);
   const [sistemaxSelectedLoteria, setSistemaxSelectedLoteria] = useState<string>("LOTTO ACTIVO");
+
+  // Sync state with selected loteria from main component
+  useEffect(() => {
+    const target = loteria === "La Granjita" ? "LA GRANJITA" : loteria === "Selva Plus" ? "SELVA PLUS" : "LOTTO ACTIVO";
+    if (sistemaxSelectedLoteria !== target) {
+      setSistemaxSelectedLoteria(target);
+    }
+  }, [loteria]);
 
   // --- Estados Manuales ---
   const [sistemaxRojo1, setSistemaxRojo1] = useState<string>("07");
@@ -159,7 +171,7 @@ export function SistemaXTab({
       return { color, isEven, val };
     };
 
-    const loteriaKey = sistemaxSelectedLoteria.toUpperCase() === "LA GRANJITA" ? "La Granjita" : "Loto Activo";
+    const loteriaKey = sistemaxSelectedLoteria.toUpperCase() === "LA GRANJITA" ? "La Granjita" : (sistemaxSelectedLoteria.toUpperCase() === "SELVA PLUS" ? "Selva Plus" : "Loto Activo");
 
     // 1. Gather from TODAY (draws state)
     if (targetIndex !== -1) {
@@ -467,7 +479,7 @@ export function SistemaXTab({
             }
           }
 
-          const loteriaKey = sistemaxSelectedLoteria.toUpperCase() === "LA GRANJITA" ? "La Granjita" : "Loto Activo";
+          const loteriaKey = sistemaxSelectedLoteria.toUpperCase() === "LA GRANJITA" ? "La Granjita" : (sistemaxSelectedLoteria.toUpperCase() === "SELVA PLUS" ? "Selva Plus" : "Loto Activo");
           const pastRecords = accumulatedResults
             .filter(r => r.loteria === loteriaKey && r.fecha < fecha)
             .sort((a, b) => b.fecha.localeCompare(a.fecha));
@@ -638,7 +650,7 @@ export function SistemaXTab({
         }
       }
 
-      const loteriaKey = sistemaxSelectedLoteria.toUpperCase() === "LA GRANJITA" ? "La Granjita" : "Loto Activo";
+      const loteriaKey = sistemaxSelectedLoteria.toUpperCase() === "LA GRANJITA" ? "La Granjita" : (sistemaxSelectedLoteria.toUpperCase() === "SELVA PLUS" ? "Selva Plus" : "Loto Activo");
       const pastRecords = accumulatedResults
         .filter(r => r.loteria === loteriaKey && r.fecha < fecha)
         .sort((a, b) => b.fecha.localeCompare(a.fecha));
@@ -843,14 +855,24 @@ export function SistemaXTab({
             <label className="text-[10px] font-black uppercase text-slate-300 block mb-1">🎰 Lotería Activa:</label>
             <select
               value={sistemaxSelectedLoteria}
-              onChange={(e) => { playSound("click"); setSistemaxSelectedLoteria(e.target.value); }}
+              onChange={(e) => { 
+                const val = e.target.value;
+                playSound("click"); 
+                setSistemaxSelectedLoteria(val); 
+                if (onChangeLoteria) {
+                  const targetParent = val === "LA GRANJITA" ? "La Granjita" : val === "SELVA PLUS" ? "Selva Plus" : "Loto Activo";
+                  onChangeLoteria(targetParent);
+                }
+              }}
               className={`w-full p-2.5 rounded-xl font-bold text-xs cursor-pointer select-none border ${
                 darkMode ? "bg-[#182033] border-slate-700/60 text-white" : "bg-white border-black text-black"
               }`}
             >
               <option value="LOTTO ACTIVO">Lotto Activo</option>
               <option value="LA GRANJITA">La Granjita</option>
+              <option value="SELVA PLUS">Selva Plus</option>
             </select>
+            <span className="text-[8.5px] text-slate-400 font-sans mt-1 block leading-tight">ℹ️ Lotto Activo, La Granjita y Selva Plus sortean los mismos 38 animales (0, 00 al 36)</span>
           </div>
 
           <div className="w-full sm:w-48">

@@ -1,4 +1,6 @@
 import { ANIMALITOS } from "../data/animalitos";
+import { DailyReport, EngineAccuracy } from "../types";
+
 
 // All canonical animal codes
 export const ALL_ANIMAL_CODES = Object.keys(ANIMALITOS);
@@ -354,7 +356,9 @@ export function runMonteCarloOracle(
   markov: MarkovResult,
   bayesian: BayesianResult,
   poisson: PoissonResult,
-  simulationsRun = 10000
+  simulationsRun = 10000,
+  calibrationProfile = "equilibrado",
+  appearedToday: string[] = []
 ): MonteCarloResult {
   const combinedScores: Record<string, number> = {};
   let totalScore = 0;
@@ -364,6 +368,42 @@ export function runMonteCarloOracle(
   const markov2Map = new Map(markov.order2.map(x => [x.code, x.prob]));
   const bayesMap = new Map(bayesian.hotList.map(x => [x.code, x.percentage / 100]));
   const poissonMap = new Map(poisson.densityList.map(x => [x.code, x.prob]));
+
+  // Define multipliers based on the selected calibration profile
+  let markovWeightFactor = 0.40;
+  let bayesianWeightFactor = 0.30;
+  let poissonWeightFactor = 0.30;
+
+  if (calibrationProfile === "rotacion") {
+    // Rotation profile: prioritize Poisson (slots) and Bayesian, reduce Markov sequences
+    markovWeightFactor = 0.15;
+    bayesianWeightFactor = 0.40;
+    poissonWeightFactor = 0.45;
+  } else if (calibrationProfile === "repeticion") {
+    // Repetition profile: extreme sequence dependency, lower Poisson hourly constraint
+    markovWeightFactor = 0.60;
+    bayesianWeightFactor = 0.30;
+    poissonWeightFactor = 0.10;
+  } else if (calibrationProfile === "racha") {
+    // Streak profile: extreme short-term focus on hot items
+    markovWeightFactor = 0.45;
+    bayesianWeightFactor = 0.45;
+    poissonWeightFactor = 0.10;
+  } else if (calibrationProfile.startsWith("dynamic_")) {
+    // Dynamic Machine Learning closed-loop autoadaptive weight configuration
+    const parts = calibrationProfile.split("_");
+    const m = parseFloat(parts[1]);
+    const b = parseFloat(parts[2]);
+    const p = parseFloat(parts[3]);
+    if (!isNaN(m) && !isNaN(b) && !isNaN(p)) {
+      const sum = m + b + p;
+      if (sum > 0) {
+        markovWeightFactor = m / sum;
+        bayesianWeightFactor = b / sum;
+        poissonWeightFactor = p / sum;
+      }
+    }
+  }
 
   ALL_ANIMAL_CODES.forEach((code) => {
     const m1 = markov1Map.get(code) || (1 / 37);
@@ -375,8 +415,26 @@ export function runMonteCarloOracle(
     // If order 2 is fully active/seeded (low actual order 2 pairs found), put more weight on order 1
     const markovWeight = markov.activeOrder2Seed ? m1 : (0.4 * m2 + 0.6 * m1);
     
-    // Balanced prediction crossing: 40% Markov, 30% Bayesian (recent streak), 30% Poisson (hour specificity)
-    const score = 0.40 * markovWeight + 0.30 * b + 0.30 * p;
+    // Core calculation with profile coefficients
+    let score = markovWeightFactor * markovWeight + bayesianWeightFactor * b + poissonWeightFactor * p;
+
+    // Apply specific behavior for animals that have already won today
+    const wasDrawnToday = appearedToday.includes(code);
+    if (wasDrawnToday) {
+      if (calibrationProfile === "rotacion") {
+        // Severe penalty (divide score by 10) because the lottery is in a high rotative mode
+        score = score * 0.05;
+      } else if (calibrationProfile === "repeticion") {
+        // Boost score by 1.75x to catch immediate temporal returns
+        score = score * 1.75;
+      }
+    } else {
+      if (calibrationProfile === "rotacion") {
+        // Slight reward for cold/unplayed numbers today
+        score = score * 1.25;
+      }
+    }
+
     combinedScores[code] = score;
     totalScore += score;
   });
@@ -446,7 +504,8 @@ export function getOracleCacheKey(
   loteria: string,
   selectedHour: string,
   isNextDayFirstHour: boolean,
-  currentDate?: string
+  currentDate?: string,
+  calibrationProfile = "equilibrado"
 ): string {
   // Filter history to keep key size small, focused on the active loteria
   const relevantHistory = accumulatedResults
@@ -459,7 +518,7 @@ export function getOracleCacheKey(
     .map(([k, v]) => `${k}:${v || "null"}`)
     .join(",");
 
-  return `${loteria}_${selectedHour}_${isNextDayFirstHour}_${currentDate || "no_date"}_[${drawsSerialized}]_[${relevantHistory}]`;
+  return `${loteria}_${selectedHour}_${isNextDayFirstHour}_${currentDate || "no_date"}_[${drawsSerialized}]_[${relevantHistory}]_${calibrationProfile}`;
 }
 
 /**
@@ -481,7 +540,8 @@ export function computeComprehensiveOracle(
   hoursList: string[],
   isNextDayFirstHour = false,
   currentDate?: string,
-  simulationsRun?: number
+  simulationsRun?: number,
+  calibrationProfile = "equilibrado"
 ): ComprehensiveOracleResult {
   const cacheKey = getOracleCacheKey(
     accumulatedResults,
@@ -489,11 +549,12 @@ export function computeComprehensiveOracle(
     loteria,
     selectedHour,
     isNextDayFirstHour,
-    currentDate
+    currentDate,
+    calibrationProfile
   );
 
   if (oracleCache.has(cacheKey)) {
-    console.log(`🔮 [Oracle Cache] HIT para ${loteria} - ${selectedHour} (Fecha: ${currentDate || "Hoy"}). Retornando cálculo en caché.`);
+    console.log(`🔮 [Oracle Cache] HIT para ${loteria} - ${selectedHour} (Fecha: ${currentDate || "Hoy"}, Calibración: ${calibrationProfile}). Retornando cálculo en caché.`);
     return oracleCache.get(cacheKey)!;
   }
 
@@ -502,7 +563,7 @@ export function computeComprehensiveOracle(
     ? simulationsRun 
     : (typeof window === "undefined" ? 10000 : 2000);
 
-  console.log(`🔮 [Oracle Cache] MISS para ${loteria} - ${selectedHour} (Fecha: ${currentDate || "Hoy"}). Ejecutando simulación Monte Carlo (${activeSims}) y Red Neuronal...`);
+  console.log(`🔮 [Oracle Cache] MISS para ${loteria} - ${selectedHour} (Fecha: ${currentDate || "Hoy"}, Calibración: ${calibrationProfile}). Ejecutando simulación Monte Carlo (${activeSims}) y Red Neuronal...`);
 
   const { sequence, lastCode, prevCode } = getSequenceOfDraws(
     accumulatedResults,
@@ -514,6 +575,13 @@ export function computeComprehensiveOracle(
     currentDate
   );
 
+  const appearedToday: string[] = [];
+  if (currentDraws) {
+    Object.values(currentDraws).forEach((val) => {
+      if (val) appearedToday.push(val);
+    });
+  }
+
   const markov = calculateMarkovTransitions(sequence, lastCode, prevCode);
   const bayesian = calculateBayesianWeights(sequence, 0.05);
   const poisson = calculatePoissonHourDensity(
@@ -522,7 +590,7 @@ export function computeComprehensiveOracle(
     isNextDayFirstHour ? hoursList[0] : selectedHour,
     currentDate
   );
-  const monteCarlo = runMonteCarloOracle(markov, bayesian, poisson, activeSims);
+  const monteCarlo = runMonteCarloOracle(markov, bayesian, poisson, activeSims, calibrationProfile, appearedToday);
 
   const result: ComprehensiveOracleResult = {
     markov,
@@ -534,3 +602,170 @@ export function computeComprehensiveOracle(
   oracleCache.set(cacheKey, result);
   return result;
 }
+
+/**
+ * Genera un Reporte Diario detallado que audita la asertividad de los motores probabilísticos
+ * y extrae los patrones y animales dominantes del día.
+ */
+export function generateDailyReport(
+  accumulatedResults: any[],
+  targetRecord: any,
+  hoursList: string[]
+): DailyReport {
+  const loteria = targetRecord.loteria;
+  const fecha = targetRecord.fecha;
+
+  // 1. Contar animales que más salieron en este día
+  const counts: Record<string, number> = {};
+  hoursList.forEach((hour) => {
+    const code = targetRecord.draws?.[hour];
+    if (code) {
+      counts[code] = (counts[code] || 0) + 1;
+    }
+  });
+
+  const topAnimals = Object.entries(counts)
+    .map(([code, count]) => {
+      const meta = ANIMALITOS[code] || { name: "Desconocido", emoji: "🎲" };
+      return {
+        code,
+        name: meta.name,
+        emoji: meta.emoji,
+        count,
+      };
+    })
+    .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+
+  // 2. Historial de días anteriores para las predicciones
+  const sortedHistory = [...accumulatedResults]
+    .filter((r) => r.loteria === loteria)
+    .sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  const idxInOriginal = sortedHistory.findIndex((r) => r.fecha === fecha);
+  const historyBefore = idxInOriginal !== -1 
+    ? sortedHistory.slice(0, idxInOriginal) 
+    : sortedHistory.filter(r => r.fecha < fecha);
+
+  let markovHits = 0;
+  let bayesHits = 0;
+  let poissonHits = 0;
+  let mcHits = 0;
+  let totalEvaluatedHours = 0;
+
+  hoursList.forEach((hour) => {
+    const actualCode = targetRecord.draws[hour];
+    if (!actualCode) return;
+
+    totalEvaluatedHours++;
+
+    // Reconstruir sorteos jugados hoy antes de esta hora específica
+    const currentDraws: Record<string, string | null> = {};
+    hoursList.forEach((h) => {
+      if (hoursList.indexOf(h) < hoursList.indexOf(hour)) {
+        currentDraws[h] = targetRecord.draws[h];
+      }
+    });
+
+    const oracle = computeComprehensiveOracle(
+      historyBefore,
+      currentDraws,
+      loteria,
+      hour,
+      hoursList,
+      false,
+      fecha,
+      300
+    );
+
+    const markovTop = oracle.markov.order1.slice(0, 3).map((x) => x.code);
+    const bayesTop = oracle.bayesian.hotList.slice(0, 3).map((x) => x.code);
+    const poissonTop = oracle.poisson.densityList.slice(0, 3).map((x) => x.code);
+    const mcTop = oracle.monteCarlo.probabilityCloud.slice(0, 3).map((x) => x.code);
+
+    if (markovTop.includes(actualCode)) markovHits++;
+    if (bayesTop.includes(actualCode)) bayesHits++;
+    if (poissonTop.includes(actualCode)) poissonHits++;
+    if (mcTop.includes(actualCode)) mcHits++;
+  });
+
+  const engineAccuracies: EngineAccuracy[] = [
+    {
+      engine: "Markov",
+      hits: markovHits,
+      total: totalEvaluatedHours,
+      accuracy: totalEvaluatedHours > 0 ? (markovHits / totalEvaluatedHours) * 100 : 0,
+    },
+    {
+      engine: "Bayes",
+      hits: bayesHits,
+      total: totalEvaluatedHours,
+      accuracy: totalEvaluatedHours > 0 ? (bayesHits / totalEvaluatedHours) * 100 : 0,
+    },
+    {
+      engine: "Poisson",
+      hits: poissonHits,
+      total: totalEvaluatedHours,
+      accuracy: totalEvaluatedHours > 0 ? (poissonHits / totalEvaluatedHours) * 100 : 0,
+    },
+    {
+      engine: "Monte Carlo",
+      hits: mcHits,
+      total: totalEvaluatedHours,
+      accuracy: totalEvaluatedHours > 0 ? (mcHits / totalEvaluatedHours) * 100 : 0,
+    },
+  ];
+
+  let bestPerf = engineAccuracies[0];
+  engineAccuracies.forEach((p) => {
+    if (p.hits > bestPerf.hits) {
+      bestPerf = p;
+    }
+  });
+
+  const bestEngine = bestPerf.hits > 0 ? bestPerf.engine : "Ninguno";
+
+  // Determinar patrón de juego
+  const drawnCodes = Object.values(targetRecord.draws).filter(Boolean) as string[];
+  const uniqueCodes = new Set(drawnCodes);
+  const repetitionsCount = drawnCodes.length - uniqueCodes.size;
+
+  let gamePattern: DailyReport["gamePattern"] = "Equilibrado";
+  let patternExplanation = "";
+
+  if (repetitionsCount > 1) {
+    gamePattern = "Repetición";
+    patternExplanation = `Se detecta un patrón de REPETICIÓN alto hoy con ${repetitionsCount} duplicaciones. Los motores de inercia local se adaptan mejor a este comportamiento reactivo.`;
+  } else if (bestEngine === "Markov") {
+    gamePattern = "Repetición";
+    patternExplanation = "Patrón de SECUENCIALIDAD (Cadenas de Markov dominantes). La ruleta sigue fuertes transiciones históricas de primer orden basadas en el último sorteo jugado.";
+  } else if (bestEngine === "Bayes") {
+    gamePattern = "Racha";
+    patternExplanation = "Patrón de RACHA (Preferencia de corto plazo). El peso Bayesiano con decaimiento exponencial demuestra que los animalitos jugados recientemente ejercen mayor atracción.";
+  } else if (bestEngine === "Poisson") {
+    gamePattern = "Rotación";
+    patternExplanation = "Patrón de ROTACIÓN (Distribución horaria Poisson activa). Se respetan las franjas horarias específicas con un comportamiento cíclico y balanceado.";
+  } else if (bestEngine === "Monte Carlo") {
+    gamePattern = "Equilibrado";
+    patternExplanation = "Patrón EQUILIBRADO (Multivariable / Monte Carlo dominante). El simulador integrado que cruza todas las distribuciones es el más efectivo hoy.";
+  } else {
+    if (repetitionsCount === 0) {
+      gamePattern = "Rotación";
+      patternExplanation = "Patrón de ROTACIÓN extrema. Ningún motor matemático individual tiene ventaja clara, indicando que el sorteador evita repetir secuencias conocidas.";
+    } else {
+      gamePattern = "Equilibrado";
+      patternExplanation = "Comportamiento mixto inusual. El sorteador combina elementos de inercia y distribución cíclica sin una ventaja determinante.";
+    }
+  }
+
+  return {
+    fecha,
+    loteria,
+    topAnimals,
+    engineAccuracies,
+    bestEngine,
+    gamePattern,
+    patternExplanation,
+    totalDraws: totalEvaluatedHours,
+  };
+}
+

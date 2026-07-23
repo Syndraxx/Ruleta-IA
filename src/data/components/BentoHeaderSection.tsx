@@ -4,6 +4,8 @@ import { Clock, Minimize2, Maximize2, Volume2, VolumeX, Bell, BellOff } from "lu
 interface BentoHeaderSectionProps {
   darkMode: boolean;
   handleThemeChange: (dark: boolean) => void;
+  darkContrast: "profundo" | "tecnologico";
+  handleDarkContrastChange: (contrast: "profundo" | "tecnologico") => void;
   soundEnabled: boolean;
   setSoundEnabled: (enabled: boolean) => void;
   notificationsEnabled: boolean;
@@ -29,6 +31,8 @@ const GlassDecoration = () => (
 export function BentoHeaderSection({
   darkMode,
   handleThemeChange,
+  darkContrast,
+  handleDarkContrastChange,
   soundEnabled,
   setSoundEnabled,
   notificationsEnabled,
@@ -202,6 +206,35 @@ export function BentoHeaderSection({
           >
             {darkMode ? "☀️ CLARO" : "🌙 OSCURO"}
           </button>
+
+          {/* Selector de Contraste para el Modo Oscuro (Accesibilidad Visual) */}
+          {darkMode && (
+            <div className="flex items-center gap-1 p-1 rounded-xl h-10 select-none border-2 border-black bg-white text-black dark:bg-[#182033] dark:border-[#2b3a55]">
+              <span className="text-[9px] font-black tracking-wider uppercase px-1 text-slate-500 dark:text-slate-400">FONDO:</span>
+              <button
+                onClick={() => { handleDarkContrastChange("profundo"); playSound("click"); }}
+                className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-lg transition-all h-7 cursor-pointer flex items-center justify-center ${
+                  darkContrast === "profundo"
+                    ? "bg-[#030712] border border-slate-600 text-white font-extrabold"
+                    : "text-slate-500 dark:text-slate-400 hover:text-black dark:hover:text-white"
+                }`}
+                title="Fondo Profundo (Casi Negro)"
+              >
+                ⚫ Profundo
+              </button>
+              <button
+                onClick={() => { handleDarkContrastChange("tecnologico"); playSound("click"); }}
+                className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-lg transition-all h-7 cursor-pointer flex items-center justify-center ${
+                  darkContrast === "tecnologico"
+                    ? "bg-[#0b1120] border border-slate-600 text-white font-extrabold"
+                    : "text-slate-500 dark:text-slate-400 hover:text-black dark:hover:text-white"
+                }`}
+                title="Fondo Tecnológico (Azul Marino Oscuro)"
+              >
+                🔵 Tecno
+              </button>
+            </div>
+          )}
 
           {/* Audio Toggle */}
           <button 

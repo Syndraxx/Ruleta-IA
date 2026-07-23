@@ -1,7 +1,7 @@
 import React from "react";
 import { ANIMALITOS } from "../../data/animalitos";
-import { ComprehensiveOracleResult } from "../../utils/predictionEngine";
-import { Sparkles, Award, Star, Activity, Percent } from "lucide-react";
+import { ComprehensiveOracleResult } from "../../core/schemas/types";
+import { Sparkles, Award, Star, Activity, Percent, Brain, AlertTriangle, Cpu } from "lucide-react";
 
 interface OraclePredictorProps {
   oracleData: ComprehensiveOracleResult | null;
@@ -13,6 +13,11 @@ interface OraclePredictorProps {
   trafficLightColors?: Record<string, "gray" | "green" | "yellow" | "red">;
   onCycleTrafficLight?: (code: string, e?: React.MouseEvent) => void;
   draws?: Record<string, string | null>;
+  deepLearningResult?: {
+    anomaly_detected: boolean;
+    confidence_score: number;
+    next_likely_codes: string[];
+  } | null;
 }
 
 export const OraclePredictor: React.FC<OraclePredictorProps> = React.memo(({
@@ -25,6 +30,7 @@ export const OraclePredictor: React.FC<OraclePredictorProps> = React.memo(({
   trafficLightColors,
   onCycleTrafficLight,
   draws,
+  deepLearningResult,
 }) => {
   if (!oracleData) return null;
 
@@ -198,6 +204,93 @@ export const OraclePredictor: React.FC<OraclePredictorProps> = React.memo(({
           );
         })}
       </div>
+
+      {/* Advanced LSTM Deep Learning Telemetry Banner */}
+      {deepLearningResult && (
+        <div className={`mt-6 p-4 rounded-2xl border ${
+          darkMode 
+            ? "bg-gradient-to-r from-indigo-950/30 via-slate-950/40 to-purple-950/30 border-indigo-500/20" 
+            : "bg-gradient-to-r from-indigo-50/70 via-white to-purple-50/70 border-indigo-200"
+        } relative overflow-hidden shadow-inner`}>
+          {/* Neon background dot */}
+          <div className="absolute -left-10 -bottom-10 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+          
+          <div className="flex flex-col lg:flex-row gap-5 items-stretch lg:items-center justify-between z-10 relative">
+            {/* Header / Info */}
+            <div className="flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${
+                darkMode ? "bg-indigo-500/10 border-indigo-500/25 text-indigo-400" : "bg-indigo-100 border-indigo-300 text-indigo-700"
+              }`}>
+                <Cpu size={18} className="animate-pulse" />
+              </div>
+              <div>
+                <span className={`text-[10px] font-black uppercase tracking-wider block ${darkMode ? "text-indigo-400" : "text-indigo-700"}`}>
+                  Motor Cognitivo LSTM de Patrones
+                </span>
+                <h4 className={`text-xs font-black uppercase tracking-tight mt-0.5 ${darkMode ? "text-slate-100" : "text-slate-900"}`}>
+                  Análisis Temporal de Redes Neuronales
+                </h4>
+              </div>
+            </div>
+
+            {/* Confidence and Anomaly Telemetry */}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Confidence Score Pill */}
+              <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 ${
+                darkMode ? "bg-slate-900/80 border-slate-800" : "bg-white border-slate-250"
+              }`}>
+                <Activity size={12} className="text-purple-400" />
+                <span className={`text-[9px] font-bold ${darkMode ? "text-slate-400" : "text-slate-600"}`}>Confianza:</span>
+                <span className="font-mono text-xs font-black text-purple-400">
+                  {Math.round(deepLearningResult.confidence_score * 100)}%
+                </span>
+              </div>
+
+              {/* Anomaly Detection Pill */}
+              <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 ${
+                deepLearningResult.anomaly_detected
+                  ? darkMode ? "bg-rose-950/20 border-rose-500/30 text-rose-400" : "bg-rose-50 border-rose-200 text-rose-700"
+                  : darkMode ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" : "bg-emerald-50 border-emerald-200 text-emerald-700"
+              }`}>
+                <AlertTriangle size={12} className={deepLearningResult.anomaly_detected ? "animate-bounce" : ""} />
+                <span className="text-[9px] font-black uppercase tracking-wider">
+                  {deepLearningResult.anomaly_detected ? "⚠️ Anomalía Detectada" : "✓ Secuencia Estable"}
+                </span>
+              </div>
+            </div>
+
+            {/* Neural predictions list */}
+            <div className="flex items-center gap-2">
+              <span className={`text-[8px] font-black uppercase tracking-wider font-mono mr-1.5 ${darkMode ? "text-slate-500" : "text-slate-400"}`}>
+                LSTM TOP 3:
+              </span>
+              <div className="flex items-center gap-1.5">
+                {deepLearningResult.next_likely_codes.map((code) => {
+                  const meta = ANIMALITOS[code];
+                  return (
+                    <div
+                      key={code}
+                      className={`px-2.5 py-1 rounded-xl border flex items-center gap-1.5 transition-all hover:scale-105 shadow-sm ${
+                        darkMode 
+                          ? "bg-slate-900 border-indigo-500/25 hover:border-indigo-500/50" 
+                          : "bg-white border-indigo-200 hover:border-indigo-400"
+                      }`}
+                    >
+                      <span className="text-sm leading-none">{meta?.emoji || "🎲"}</span>
+                      <span className={`font-mono text-[10px] font-black ${darkMode ? "text-indigo-400" : "text-indigo-700"}`}>
+                        [{code}]
+                      </span>
+                      <span className={`text-[9px] font-black uppercase tracking-tight ${darkMode ? "text-slate-200" : "text-slate-800"}`}>
+                        {meta?.name}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 });

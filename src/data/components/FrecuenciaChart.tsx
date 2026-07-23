@@ -15,8 +15,8 @@ interface AccumulatedItem {
 }
 
 interface FrecuenciaChartProps {
-  loteria: "Loto Activo" | "La Granjita";
-  setLoteria: (val: "Loto Activo" | "La Granjita") => void;
+  loteria: "Loto Activo" | "La Granjita" | "Selva Plus";
+  setLoteria: (val: "Loto Activo" | "La Granjita" | "Selva Plus") => void;
   fecha: string; // End date in format YYYY-MM-DD
   accumulatedResults: AccumulatedItem[];
   darkMode: boolean;
@@ -321,6 +321,20 @@ export const FrecuenciaChart: React.FC<FrecuenciaChartProps> = React.memo(({
             }`}
           >
             La Granjita
+          </button>
+          <button
+            onClick={() => setLoteria("Selva Plus")}
+            className={`flex-1 md:flex-initial px-4 py-2 text-[10px] font-black uppercase tracking-wider rounded-xl border transition-all duration-150 cursor-pointer ${
+              loteria === "Selva Plus"
+                ? darkMode
+                  ? "bg-purple-600/20 border-purple-500 text-purple-300"
+                  : "bg-purple-600 text-white border-2 border-black font-black comic-shadow-small"
+                : darkMode
+                  ? "bg-[#182033]/60 border-slate-800 text-slate-400 hover:text-slate-200"
+                  : "bg-white border-2 border-slate-200 text-slate-800 hover:bg-slate-50"
+            }`}
+          >
+            Selva Plus
           </button>
           <button
             onClick={handleExportImage}

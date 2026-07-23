@@ -23,13 +23,15 @@ def get_venezuela_today():
 
 def slice_html_by_lottery(html, slug):
     """
-    Slices the HTML to isolate the section corresponding to the target lottery (La Granjita or Loto Activo)
+    Slices the HTML to isolate the section corresponding to the target lottery (La Granjita, Loto Activo or Selva Plus)
     to prevent mixed/cross draws from appearing on general endpoints.
     """
     html_lower = html.lower()
     
     if slug == "lagranjita":
         keywords = ["la granjita", "lagranjita", "granjita"]
+    elif slug == "selvaplus":
+        keywords = ["selva plus", "selvaplus"]
     else:
         keywords = ["loto activo", "lotto activo", "lottoactivo", "lotoactivo"]
     
@@ -45,7 +47,13 @@ def slice_html_by_lottery(html, slug):
     if best_pos == -1:
         return html
         
-    other_keywords = ["loto activo", "lotto activo", "lottoactivo", "lotoactivo"] if slug == "lagranjita" else ["la granjita", "lagranjita", "granjita"]
+    if slug == "lagranjita":
+        other_keywords = ["loto activo", "lotto activo", "lottoactivo", "lotoactivo", "selva plus", "selvaplus"]
+    elif slug == "selvaplus":
+        other_keywords = ["loto activo", "lotto activo", "lottoactivo", "lotoactivo", "la granjita", "lagranjita", "granjita"]
+    else:
+        other_keywords = ["la granjita", "lagranjita", "granjita", "selva plus", "selvaplus"]
+
     next_pos = -1
     for okw in other_keywords:
         pos = html_lower.find(okw, best_pos + len(matched_kw))
@@ -271,7 +279,12 @@ def extraer_resultados_reales(loteria, fecha_str):
     # Mapeo del slug para loteriadehoy.com
     # Loto Activo -> lottoactivo
     # La Granjita -> lagranjita
-    slug = "lagranjita" if "granj" in loteria.lower() else "lottoactivo"
+    if "granj" in loteria.lower():
+        slug = "lagranjita"
+    elif "selva" in loteria.lower():
+        slug = "selvaplus"
+    else:
+        slug = "lottoactivo"
     
     # URL para la fecha consultada (formato YYYY-MM-DD)
     url_fecha = f"https://loteriadehoy.com/animalito/{slug}/resultados/{fecha_str}/"
@@ -314,7 +327,12 @@ def extraer_resultados_reales(loteria, fecha_str):
     except Exception:
         fecha_dd_mm_yyyy = fecha_str
 
-    jact_slug = "la-granjita" if slug == "lagranjita" else "lotto-activo"
+    if slug == "lagranjita":
+        jact_slug = "la-granjita"
+    elif slug == "selvaplus":
+        jact_slug = "selva-plus"
+    else:
+        jact_slug = "lotto-activo"
 
     urls_to_try = [
         # 1. URL específica de la fecha para esta lotería específica

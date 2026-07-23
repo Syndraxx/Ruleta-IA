@@ -1,6 +1,6 @@
 {
   "name": "Remix: Ruleta Pro IA",
-  "description": "Panel inteligente con estilo de cómic, reloj dinámico, selector de loterías (Loto Activo y La Granjita), extracción histórica por scraping seguro de animalitos y cálculo predictivo de trilogías con Inteligencia Artificial.",
+  "description": "Panel inteligente con estilo de cómic, reloj dinámico, selector de loterías (Loto Activo, La Granjita y Selva Plus), extracción histórica por scraping seguro de animalitos y cálculo predictivo de trilogías con Inteligencia Artificial.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

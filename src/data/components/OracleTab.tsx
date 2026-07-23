@@ -11,9 +11,11 @@ import {
   HelpCircle
 } from "lucide-react";
 import { ANIMALITOS } from "../../data/animalitos";
-import { computeComprehensiveOracle } from "../../utils/predictionEngine";
+import { computeComprehensiveOracle, getSequenceOfDraws } from "../../core/engine/oraculoUnificado";
+import { OracleService } from "../../services/api/oracleService";
 import { OraclePredictor } from "./OraclePredictor";
 import { AuditorDeAciertosIA } from "./AuditorDeAciertosIA";
+import { MetaAnalysisWidget } from "./MetaAnalysisWidget";
 
 interface OracleTabProps {
   darkMode: boolean;
@@ -46,11 +48,13 @@ export function OracleTab({
 }: OracleTabProps) {
   const [selectedHour, setSelectedHour] = useState<string>("08:00 AM");
   const [showAuditor, setShowAuditor] = useState<boolean>(true);
+  const [showMetaAnalysis, setShowMetaAnalysis] = useState<boolean>(true);
   const [animalsCount, setAnimalsCount] = useState<number>(2); // Default to 2, exactly as the user wanted
 
   // Hybrid Dual-Compute states for professional AI telemetry & offloading
   const [isServerDeepRun, setIsServerDeepRun] = useState<boolean>(true);
   const [serverPredictions, setServerPredictions] = useState<Record<string, any>>({});
+  const [deepLearningPredictions, setDeepLearningPredictions] = useState<Record<string, any>>({});
   const [isFetchingServer, setIsFetchingServer] = useState<boolean>(false);
   const [serverLatency, setServerLatency] = useState<string>("");
   const [engineStatus, setEngineStatus] = useState<"ready" | "fetching" | "error" | "fallback">("ready");
@@ -69,7 +73,7 @@ export function OracleTab({
     return results;
   }, [accumulatedResults, draws, loteria, hoursList, fecha]);
 
-  // Asynchronously offload the selected hour's deep analysis (25,000 simulations) to the Server Decoupled AI endpoint
+  // Asynchronously offload the selected hour's deep analysis (25,000 simulations) and LSTM patterns to the Server Decoupled AI endpoint
   React.useEffect(() => {
     if (!isServerDeepRun) {
       setEngineStatus("fallback");
@@ -83,10 +87,20 @@ export function OracleTab({
       const startTime = performance.now();
 
       try {
-        const response = await fetch("/api/predict", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        // Extract sequence of draws in frontend to feed to the LSTM sequence matcher
+        const { sequence } = getSequenceOfDraws(
+          accumulatedResults,
+          draws,
+          loteria,
+          selectedHour,
+          hoursList,
+          false,
+          fecha
+        );
+
+        // Run both computations in parallel as requested by z.ai
+        const [oracleResult, mlResult] = await Promise.all([
+          OracleService.fetchPrediction({
             accumulatedResults,
             currentDraws: draws,
             loteria,
@@ -95,21 +109,19 @@ export function OracleTab({
             isNextDayFirstHour: false,
             currentDate: fecha,
             simulationsRun: 25000 // Server Deep Run simulations
-          })
-        });
+          }),
+          OracleService.fetchDeepLearning(sequence)
+        ]);
 
-        if (!response.ok) throw new Error("Fallo de conexión o respuesta errónea del servidor.");
-        const data = await response.json();
-
-        if (isMounted && data.success && data.result) {
+        if (isMounted) {
           const endTime = performance.now();
           const latency = Math.round(endTime - startTime);
           const cacheKey = `${loteria}_${selectedHour}`;
-          setServerPredictions(prev => ({ ...prev, [cacheKey]: data.result }));
+          
+          setServerPredictions(prev => ({ ...prev, [cacheKey]: oracleResult }));
+          setDeepLearningPredictions(prev => ({ ...prev, [cacheKey]: mlResult }));
           setServerLatency(`${latency} ms`);
           setEngineStatus("ready");
-        } else {
-          throw new Error("Datos devueltos inválidos.");
         }
       } catch (err) {
         console.warn("Fallo de conexión o respuesta errónea del servidor, usando motor local ultra-rápido:", err);
@@ -138,6 +150,15 @@ export function OracleTab({
     }
     return hourlyOracleData[selectedHour] || null;
   }, [loteria, selectedHour, serverPredictions, hourlyOracleData, isServerDeepRun]);
+
+  // Select the highest precision deep learning result available
+  const selectedDeepLearning = useMemo(() => {
+    const cacheKey = `${loteria}_${selectedHour}`;
+    if (isServerDeepRun && deepLearningPredictions[cacheKey]) {
+      return deepLearningPredictions[cacheKey];
+    }
+    return null;
+  }, [loteria, selectedHour, deepLearningPredictions, isServerDeepRun]);
 
   // Custom text colors based on dark mode
   const titleColor = darkMode ? "text-purple-400" : "text-purple-800";
@@ -211,10 +232,47 @@ export function OracleTab({
             }`}
           >
             <span>📊</span>
-            <span>{showAuditor ? "Ocultar Auditor" : "Ver Auditor de Aciertos"}</span>
+            <span>{showAuditor ? "Ocultar Auditor" : "Ver Auditor"}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              playSound("click");
+              setShowMetaAnalysis(!showMetaAnalysis);
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all border ${
+              showMetaAnalysis
+                ? darkMode
+                  ? "bg-indigo-950/40 text-indigo-300 border-indigo-500/40 shadow-md"
+                  : "bg-indigo-100 text-indigo-800 border-indigo-300 shadow-sm"
+                : darkMode
+                  ? "bg-slate-900/40 text-slate-400 border-slate-800"
+                  : "bg-slate-100 text-slate-600 border-slate-300"
+            }`}
+          >
+            <span>🧠</span>
+            <span>{showMetaAnalysis ? "Ocultar Meta-Análisis" : "Ver Meta-Análisis"}</span>
           </button>
         </div>
       </div>
+
+      {/* Meta-Análisis de Motores IA */}
+      {showMetaAnalysis && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full"
+        >
+          <MetaAnalysisWidget
+            accumulatedResults={accumulatedResults}
+            draws={draws}
+            fecha={fecha}
+            loteria={loteria}
+            darkMode={darkMode}
+            playSound={playSound}
+          />
+        </motion.div>
+      )}
 
       {/* Auditor de Aciertos IA */}
       {showAuditor && (
@@ -551,6 +609,7 @@ export function OracleTab({
             animalsCount={animalsCount}
             trafficLightColors={trafficLightColors}
             onCycleTrafficLight={onCycleTrafficLight}
+            deepLearningResult={selectedDeepLearning}
           />
         </div>
       </div>

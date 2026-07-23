@@ -30,3 +30,27 @@ export interface AIResponse {
   analisis: string;
   error?: string;
 }
+
+export interface EngineAccuracy {
+  engine: "Markov" | "Bayes" | "Poisson" | "Monte Carlo";
+  accuracy: number;
+  hits: number;
+  total: number;
+}
+
+export interface DailyReport {
+  fecha: string;
+  loteria: string;
+  topAnimals: Array<{
+    code: string;
+    name: string;
+    emoji: string;
+    count: number;
+  }>;
+  engineAccuracies: EngineAccuracy[];
+  bestEngine: string;
+  gamePattern: "Rotación" | "Repetición" | "Racha" | "Equilibrado";
+  patternExplanation: string;
+  totalDraws: number;
+}
+

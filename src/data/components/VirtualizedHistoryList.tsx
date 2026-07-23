@@ -46,14 +46,6 @@ export const VirtualizedHistoryList = React.memo(function VirtualizedHistoryList
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  if (items.length === 0) {
-    return (
-      <div className="py-8 text-center text-xs font-bold text-slate-500 font-sans select-none font-sans">
-        No hay ningún sorteo guardado aún. ¡Utiliza el scraper o el registro manual para comenzar a acumular tu base de datos!
-      </div>
-    );
-  }
-
   const Row = React.useCallback(({ index, style }: { index: number; style: React.CSSProperties }) => {
     const item = items[index];
     if (!item) return null;
@@ -134,6 +126,14 @@ export const VirtualizedHistoryList = React.memo(function VirtualizedHistoryList
       </div>
     );
   }, [items, darkMode, hoursList, ANIMALITOS, handleRestoreFromHistoryItem, triggerModalConfirm, setAccumulatedResults, addLog, playSound]);
+
+  if (items.length === 0) {
+    return (
+      <div className="py-8 text-center text-xs font-bold text-slate-500 font-sans select-none font-sans">
+        No hay ningún sorteo guardado aún. ¡Utiliza el scraper o el registro manual para comenzar a acumular tu base de datos!
+      </div>
+    );
+  }
 
   return (
     <div className="h-62 overflow-hidden pr-1 relative select-none">
